@@ -1,0 +1,9 @@
+# Webman API 2.0 定时任务
+# 每5分钟检查一次更新
+*/5 * * * * /usr/local/bin/auto-deploy.sh check >/dev/null 2>&1
+
+# 每天凌晨2点清理日志
+0 2 * * * find /app/runtime/logs -name "*.log" -mtime +7 -delete >/dev/null 2>&1
+
+# 每天凌晨3点重启服务（可选）
+# 0 3 * * * php /app/start.php restart >/dev/null 2>&1
