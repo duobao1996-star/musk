@@ -1,230 +1,245 @@
-# Webman API 后端系统
+# 🚀 Webman API 2.0
 
-基于 Webman 2.0 框架开发的企业级后端API系统，提供完整的用户管理、权限管理、操作日志等功能。
+> 基于 Webman 2.0 框架开发的企业级后端API系统，支持前后端分离架构
 
-## 功能特性
+[![PHP Version](https://img.shields.io/badge/PHP-8.2+-blue.svg)](https://php.net)
+[![Webman Version](https://img.shields.io/badge/Webman-2.0-green.svg)](https://www.workerman.net/doc/webman/)
+[![MySQL Version](https://img.shields.io/badge/MySQL-8.0+-orange.svg)](https://mysql.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-### 🔐 认证系统
-- JWT Token 认证
-- 用户登录/登出
-- 密码加密存储
-- 跨域支持 (CORS)
+## ✨ 功能特性
 
-### 👥 用户管理
-- 管理员管理
-- 商户/代理管理
-- 用户状态管理
-- 密码重置功能
+- 🔐 **JWT认证系统** - 安全的用户认证和授权
+- 👥 **RBAC权限管理** - 基于角色的访问控制
+- 👤 **用户管理模块** - 管理员、商户、代理管理
+- 📊 **操作日志系统** - 完整的操作审计记录
+- ⚡ **性能监控** - API性能指标实时监控
+- 🗑️ **软删除机制** - 数据安全删除和恢复
+- 📚 **美观的API文档** - 可视化交互式文档
+- 🚀 **Redis缓存支持** - 高性能缓存机制
+- 🏊 **数据库连接池** - 高效的数据库连接管理
+- 🛡️ **安全防护** - CSRF保护、XSS防护、限流
 
-### 🛡️ 权限管理 (RBAC)
-- 角色管理
-- 权限管理
-- 角色权限关联
-- 树形权限结构
-- 菜单权限控制
+## 🛠️ 技术栈
 
-### 📊 操作日志
-- 自动记录操作日志
-- 登录/登出日志
-- 操作统计分析
-- 日志清理功能
-
-## 技术栈
-
-- **框架**: Webman 2.0
-- **数据库**: MySQL
+- **后端框架**: Webman 2.0
+- **PHP版本**: 8.2+
+- **数据库**: MySQL 8.0+
+- **缓存**: Redis 6.0+
 - **认证**: JWT (JSON Web Token)
-- **语言**: PHP 8.2+
-- **架构**: 前后端分离
+- **架构**: RESTful API + 前后端分离
 
-## 快速开始
+## 🚀 快速开始
 
 ### 环境要求
+
 - PHP >= 8.2
-- MySQL >= 5.7
+- MySQL >= 8.0
+- Redis >= 6.0 (可选，支持文件缓存降级)
 - Composer
 
-### 安装步骤
+### 安装部署
 
-1. 克隆项目
 ```bash
-git clone <repository-url>
-cd webman-api
-```
+# 1. 克隆项目
+git clone https://github.com/duobao1996-star/musk.git
+cd musk
 
-2. 安装依赖
-```bash
+# 2. 安装依赖
 composer install
-```
 
-3. 配置数据库
-```bash
-# 复制配置文件
-cp config/database.php.example config/database.php
+# 3. 配置环境变量
+cp env.example .env
+# 编辑 .env 文件配置数据库和Redis
 
-# 编辑数据库配置
-vim config/database.php
-```
-
-4. 导入数据库
-```sql
--- 导入数据库结构和初始数据
-mysql -u username -p database_name < database.sql
-```
-
-5. 启动服务
-```bash
-# 开发环境
+# 4. 启动服务
 php start.php start
-
-# 生产环境
-php start.php start -d
 ```
 
-### 访问地址
-- API地址: `http://127.0.0.1:8787/api`
-- 文档地址: `http://127.0.0.1:8787/api/docs` (如果配置了文档)
+### 服务地址
 
-## 项目结构
+- **开发环境**: http://127.0.0.1:8787
+- **API文档**: http://127.0.0.1:8787/api-docs
+- **API基础路径**: http://127.0.0.1:8787/api
+
+## 📚 API文档
+
+项目提供了美观的可视化API文档，包含：
+
+- 📖 完整的接口说明
+- 🔧 交互式API测试
+- 📋 参数详细说明
+- 💡 使用示例
+
+访问地址: http://127.0.0.1:8787/api-docs
+
+## 🗂️ 项目结构
 
 ```
 webman-api/
 ├── app/                    # 应用目录
 │   ├── controller/         # 控制器
-│   │   ├── AuthController.php      # 认证控制器
-│   │   ├── AdminController.php     # 管理员控制器
-│   │   ├── MerchantController.php  # 商户控制器
-│   │   ├── RoleController.php      # 角色控制器
-│   │   ├── PermissionController.php # 权限控制器
-│   │   └── OperationLogController.php # 操作日志控制器
-│   ├── model/              # 模型
-│   │   ├── User.php        # 用户模型
-│   │   ├── Role.php        # 角色模型
-│   │   ├── Right.php       # 权限模型
-│   │   └── RoleRight.php   # 角色权限关联模型
-│   ├── middleware/         # 中间件
-│   │   ├── CorsMiddleware.php      # 跨域中间件
-│   │   ├── JwtMiddleware.php       # JWT认证中间件
-│   │   ├── OperationLogMiddleware.php # 操作日志中间件
-│   │   └── PermissionMiddleware.php   # 权限验证中间件
-│   └── support/            # 支持类
-│       └── Database.php    # 数据库助手类
-├── config/                 # 配置文件
-│   ├── database.php        # 数据库配置
-│   ├── route.php          # 路由配置
-│   └── middleware.php     # 中间件配置
-├── API.md                 # API接口文档
-├── FRONTEND_GUIDE.md      # 前端开发指南
-├── CHANGELOG.md           # 更新日志
+│   ├── model/             # 数据模型
+│   ├── middleware/        # 中间件
+│   ├── support/           # 支持类
+│   └── view/              # 视图模板
+├── config/                # 配置文件
+├── database/              # 数据库相关
+├── public/                # 公共资源
+├── runtime/               # 运行时文件
+├── support/               # 框架支持
+├── API.md                 # API文档
 └── README.md              # 项目说明
 ```
 
-## API 文档
+## 🔧 配置说明
 
-### 认证接口
-- `POST /api/login` - 用户登录
-- `POST /api/register` - 用户注册
-- `GET /api/me` - 获取当前用户信息
-- `POST /api/refresh` - 刷新Token
-- `POST /api/logout` - 用户登出
+### 数据库配置
 
-### 用户管理接口
-- `GET /api/admin` - 获取管理员列表
-- `POST /api/admin` - 创建管理员
-- `GET /api/admin/{id}` - 获取管理员详情
-- `PUT /api/admin/{id}` - 更新管理员
-- `DELETE /api/admin/{id}` - 删除管理员
-- `GET /api/merchant` - 获取商户列表
-- `POST /api/merchant` - 创建商户
-- `PUT /api/merchant/{id}/reset-password` - 重置密码
-- `PUT /api/merchant/{id}/toggle-status` - 切换状态
+```php
+// config/database.php
+'connections' => [
+    'mysql' => [
+        'host' => '127.0.0.1',
+        'port' => 3306,
+        'database' => 'newsf1',
+        'username' => 'newsf1',
+        'password' => 'newsf1',
+        'charset' => 'utf8mb4',
+    ],
+],
+```
 
-### 权限管理接口
-- `GET /api/roles` - 获取角色列表
-- `POST /api/roles` - 创建角色
-- `GET /api/roles/{id}` - 获取角色详情
-- `PUT /api/roles/{id}` - 更新角色
-- `DELETE /api/roles/{id}` - 删除角色
-- `GET /api/roles/{id}/rights` - 获取角色权限
-- `POST /api/roles/{id}/rights` - 设置角色权限
-- `GET /api/permissions` - 获取权限列表
-- `GET /api/permissions/tree` - 获取权限树
-- `POST /api/permissions` - 创建权限
-- `PUT /api/permissions/{id}` - 更新权限
-- `DELETE /api/permissions/{id}` - 删除权限
+### Redis配置
 
-### 操作日志接口
-- `GET /api/logs` - 获取操作日志
-- `GET /api/logs/stats` - 获取日志统计
-- `GET /api/logs/login` - 获取登录日志
-- `POST /api/logs/clean` - 清理日志
+```php
+// config/redis.php
+'connections' => [
+    'cache' => [
+        'host' => '127.0.0.1',
+        'port' => 6379,
+        'password' => '',
+        'database' => 0,
+    ],
+],
+```
 
-详细接口文档请参考 [API.md](./API.md)
+## 🔐 认证说明
 
-## 前端开发
+### JWT认证
 
-前端开发指南请参考 [FRONTEND_GUIDE.md](./FRONTEND_GUIDE.md)
+所有需要认证的接口都需要在请求头中携带JWT令牌：
 
-## 数据库设计
+```http
+Authorization: Bearer <your_jwt_token>
+```
 
-### 主要数据表
-- `pay_admin` - 管理员表
-- `pay_user` - 用户表
-- `pay_role` - 角色表
-- `pay_right` - 权限表
-- `pay_role_right` - 角色权限关联表
-- `pay_operation_log` - 操作日志表
+### 获取令牌
 
-## 开发规范
+```bash
+curl -X POST http://127.0.0.1:8787/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password123"}'
+```
 
-### 代码规范
-- 遵循 PSR-4 自动加载规范
-- 使用 PSR-12 代码风格
-- 控制器方法使用 RESTful 命名
-- 统一使用 JSON 响应格式
+## 📊 主要功能模块
 
-### 接口规范
-- 统一响应格式：`{code, message, data, timestamp}`
-- 使用 HTTP 状态码表示请求结果
-- 所有接口都需要认证（除登录接口外）
-- 支持分页查询
+### 1. 用户认证
+- 用户登录/登出
+- JWT令牌管理
+- 令牌刷新机制
 
-### 错误处理
-- 统一错误响应格式
-- 详细的错误信息记录
-- 操作日志自动记录
+### 2. 用户管理
+- 管理员管理
+- 商户管理
+- 代理管理
+- 密码重置
 
-## 部署说明
+### 3. 权限管理
+- 角色管理
+- 权限管理
+- RBAC权限控制
+
+### 4. 操作日志
+- 登录日志
+- 操作记录
+- 日志统计
+- 日志清理
+
+### 5. 性能监控
+- API性能统计
+- 慢查询监控
+- 内存使用监控
+
+### 6. 软删除管理
+- 数据软删除
+- 数据恢复
+- 批量操作
+- 数据清理
+
+## 🚀 部署指南
 
 ### 生产环境部署
-1. 配置 Nginx 反向代理
-2. 配置 SSL 证书
-3. 设置进程守护
-4. 配置日志轮转
-5. 设置监控告警
 
-### 性能优化
-- 启用 OPcache
-- 配置数据库连接池
-- 使用 Redis 缓存
-- 启用 Gzip 压缩
+```bash
+# 1. 设置环境变量
+export APP_ENV=production
 
-## 更新日志
+# 2. 启动服务（守护进程模式）
+php start.php start -d
 
-详细更新日志请参考 [CHANGELOG.md](./CHANGELOG.md)
+# 3. 停止服务
+php start.php stop
 
-## 贡献指南
+# 4. 重启服务
+php start.php restart
 
-1. Fork 项目
-2. 创建功能分支
-3. 提交更改
-4. 推送到分支
-5. 创建 Pull Request
+# 5. 查看状态
+php start.php status
+```
 
-## 许可证
+### Docker部署（可选）
 
-MIT License
+```dockerfile
+FROM php:8.2-cli
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    && docker-php-ext-install zip pdo pdo_mysql
+WORKDIR /app
+COPY . .
+RUN composer install --no-dev --optimize-autoloader
+EXPOSE 8787
+CMD ["php", "start.php", "start"]
+```
 
-## 联系方式
+## 🤝 贡献指南
 
-如有问题或建议，请联系开发团队。
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 📞 技术支持
+
+- **项目仓库**: https://github.com/duobao1996-star/musk
+- **问题反馈**: [Issues](https://github.com/duobao1996-star/musk/issues)
+- **技术文档**: [API.md](API.md)
+
+## 🙏 致谢
+
+感谢以下开源项目：
+
+- [Webman](https://www.workerman.net/doc/webman/) - 高性能PHP框架
+- [Workerman](https://www.workerman.net/) - PHP异步网络框架
+- [Firebase JWT](https://github.com/firebase/php-jwt) - JWT处理库
+
+---
+
+⭐ 如果这个项目对您有帮助，请给它一个星标！
