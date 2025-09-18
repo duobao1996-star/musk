@@ -2,15 +2,12 @@
 
 namespace app\model;
 
-use app\support\Database;
+use think\facade\Db;
 
 class RoleRight
 {
-    private $db;
-
     public function __construct()
     {
-        $this->db = Database::getInstance();
     }
 
     /**
@@ -18,11 +15,14 @@ class RoleRight
      */
     public function getRoleRights($roleId)
     {
-        $sql = "SELECT r.* FROM pay_right r 
-                INNER JOIN pay_role_right rr ON r.id = rr.right_id 
-                WHERE rr.role_id = ? 
-                ORDER BY r.sort ASC";
-        return $this->db->findAll($sql, [$roleId]);
+        $rows = Db::table('pay_right')->alias('r')
+            ->join(['pay_role_right' => 'rr'], 'r.id = rr.right_id')
+            ->where('rr.role_id', $roleId)
+            ->order('r.sort', 'asc')
+            ->field('r.*')
+            ->select()
+            ->toArray();
+        return $rows;
     }
 
     /**
@@ -30,11 +30,15 @@ class RoleRight
      */
     public function getRightRoles($rightId)
     {
-        $sql = "SELECT ro.* FROM pay_role ro 
-                INNER JOIN pay_role_right rr ON ro.id = rr.role_id 
-                WHERE rr.right_id = ? AND ro.is_del = 1
-                ORDER BY ro.order_no ASC";
-        return $this->db->findAll($sql, [$rightId]);
+        $rows = Db::table('pay_role')->alias('ro')
+            ->join(['pay_role_right' => 'rr'], 'ro.id = rr.role_id')
+            ->where('rr.right_id', $rightId)
+            ->where('ro.is_del', 1)
+            ->order('ro.order_no', 'asc')
+            ->field('ro.*')
+            ->select()
+            ->toArray();
+        return $rows;
     }
 
     /**
@@ -42,9 +46,7 @@ class RoleRight
      */
     public function hasRight($roleId, $rightId)
     {
-        $sql = "SELECT COUNT(*) as count FROM pay_role_right WHERE role_id = ? AND right_id = ?";
-        $result = $this->db->find($sql, [$roleId, $rightId]);
-        return $result['count'] > 0;
+        return Db::table('pay_role_right')->where('role_id', $roleId)->where('right_id', $rightId)->count() > 0;
     }
 
     /**
@@ -57,8 +59,7 @@ class RoleRight
             return true;
         }
 
-        $sql = "INSERT INTO pay_role_right (role_id, right_id) VALUES (?, ?)";
-        return $this->db->execute($sql, [$roleId, $rightId]);
+        return Db::table('pay_role_right')->insert(['role_id' => $roleId, 'right_id' => $rightId]);
     }
 
     /**
@@ -66,8 +67,7 @@ class RoleRight
      */
     public function removeRoleRight($roleId, $rightId)
     {
-        $sql = "DELETE FROM pay_role_right WHERE role_id = ? AND right_id = ?";
-        return $this->db->execute($sql, [$roleId, $rightId]);
+        return Db::table('pay_role_right')->where('role_id', $roleId)->where('right_id', $rightId)->delete() > 0;
     }
 
     /**
@@ -76,23 +76,15 @@ class RoleRight
     public function setRoleRights($roleId, $rightIds)
     {
         // 先删除现有权限
-        $deleteSql = "DELETE FROM pay_role_right WHERE role_id = ?";
-        $this->db->execute($deleteSql, [$roleId]);
+        Db::table('pay_role_right')->where('role_id', $roleId)->delete();
 
         // 添加新权限
         if (!empty($rightIds)) {
-            $insertSql = "INSERT INTO pay_role_right (role_id, right_id) VALUES ";
-            $values = [];
-            $params = [];
-            
+            $rows = [];
             foreach ($rightIds as $rightId) {
-                $values[] = "(?, ?)";
-                $params[] = $roleId;
-                $params[] = $rightId;
+                $rows[] = ['role_id' => $roleId, 'right_id' => $rightId];
             }
-            
-            $insertSql .= implode(', ', $values);
-            $this->db->execute($insertSql, $params);
+            Db::table('pay_role_right')->insertAll($rows);
         }
         
         return true;
@@ -103,11 +95,14 @@ class RoleRight
      */
     public function getRoleRightTree($roleId)
     {
-        $sql = "SELECT r.* FROM pay_right r 
-                INNER JOIN pay_role_right rr ON r.id = rr.right_id 
-                WHERE rr.role_id = ? AND r.menu = 1
-                ORDER BY r.sort ASC";
-        $rights = $this->db->findAll($sql, [$roleId]);
+        $rows = Db::table('pay_right')->alias('r')
+            ->join(['pay_role_right' => 'rr'], 'r.id = rr.right_id')
+            ->where('rr.role_id', $roleId)
+            ->order('r.sort', 'asc')
+            ->field('r.*')
+            ->select()
+            ->toArray();
+        $rights = $rows;
         
         return $this->buildTree($rights);
     }
@@ -137,8 +132,8 @@ class RoleRight
      */
     public function getAllRightsTree()
     {
-        $sql = "SELECT * FROM pay_right WHERE menu = 1 ORDER BY sort ASC";
-        $rights = $this->db->findAll($sql);
+        $rows = Db::table('pay_right')->order('sort', 'asc')->select()->toArray();
+        $rights = $rows;
         
         return $this->buildTree($rights);
     }
@@ -148,8 +143,7 @@ class RoleRight
      */
     public function deleteRoleRights($roleId)
     {
-        $sql = "DELETE FROM pay_role_right WHERE role_id = ?";
-        return $this->db->execute($sql, [$roleId]);
+        return Db::table('pay_role_right')->where('role_id', $roleId)->delete() > 0;
     }
 
     /**
@@ -157,7 +151,6 @@ class RoleRight
      */
     public function deleteRightRoles($rightId)
     {
-        $sql = "DELETE FROM pay_role_right WHERE right_id = ?";
-        return $this->db->execute($sql, [$rightId]);
+        return Db::table('pay_role_right')->where('right_id', $rightId)->delete() > 0;
     }
 }

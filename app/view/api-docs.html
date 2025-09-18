@@ -359,6 +359,7 @@
                 <li><a href="#auth"><i class="fas fa-key"></i> 认证授权</a></li>
                 <li><a href="#specs"><i class="fas fa-book"></i> 通用规范</a></li>
                 <li><a href="#apis"><i class="fas fa-code"></i> 接口列表</a></li>
+                <li><a href="#soft-delete"><i class="fas fa-trash-alt"></i> 软删除管理</a></li>
                 <li><a href="#support"><i class="fas fa-life-ring"></i> 技术支持</a></li>
             </ul>
         </div>
@@ -396,7 +397,7 @@
                     <div class="feature-item">
                         <i class="fas fa-users"></i>
                         <h4>用户管理</h4>
-                        <p>管理员、商户、代理管理</p>
+                        <p>仅管理员管理（已移除普通用户/商户/代理）</p>
                     </div>
                     <div class="feature-item">
                         <i class="fas fa-lock"></i>
@@ -724,6 +725,62 @@ X-CSRF-Token: &lt;csrf_token&gt;    # POST/PUT/DELETE请求
                         <h4><i class="fas fa-chart-line"></i> 获取性能统计</h4>
                         <p>获取性能统计信息</p>
                         <button class="try-button" onclick="tryApi('GET', '/api/performance/stats', this)">尝试调用</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 软删除管理 -->
+            <div class="section" id="soft-delete">
+                <h2><i class="fas fa-trash-alt"></i> 软删除管理</h2>
+
+                <div class="api-endpoint">
+                    <div class="endpoint-header">
+                        <span class="method">GET</span>
+                        <span class="endpoint-url">/api/soft-delete/logs</span>
+                    </div>
+                    <div class="endpoint-content">
+                        <h4><i class="fas fa-list"></i> 获取已删除日志列表</h4>
+                        <p>获取软删除状态的操作日志</p>
+                        <button class="try-button" onclick="tryApi('GET', '/api/soft-delete/logs', this)">尝试调用</button>
+                    </div>
+                </div>
+
+                <div class="api-endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/api/soft-delete/restore/log</span>
+                    </div>
+                    <div class="endpoint-content">
+                        <h4><i class="fas fa-undo"></i> 恢复日志</h4>
+                        <p>将软删除日志恢复为正常</p>
+                        <div class="code-block">{ "id": 1 }</div>
+                        <button class="try-button" onclick="tryApi('POST', '/api/soft-delete/restore/log', this)">尝试调用</button>
+                    </div>
+                </div>
+
+                <div class="api-endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/api/soft-delete/force-delete/log</span>
+                    </div>
+                    <div class="endpoint-content">
+                        <h4><i class="fas fa-trash"></i> 永久删除日志</h4>
+                        <p>物理删除软删除日志</p>
+                        <div class="code-block">{ "id": 1 }</div>
+                        <button class="try-button" onclick="tryApi('POST', '/api/soft-delete/force-delete/log', this)">尝试调用</button>
+                    </div>
+                </div>
+
+                <div class="api-endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/api/soft-delete/cleanup</span>
+                    </div>
+                    <div class="endpoint-content">
+                        <h4><i class="fas fa-broom"></i> 清理软删除数据</h4>
+                        <p>清理 N 天前的软删除数据（日志与性能数据）</p>
+                        <div class="code-block">{ "days": 7 }</div>
+                        <button class="try-button" onclick="tryApi('POST', '/api/soft-delete/cleanup', this)">尝试调用</button>
                     </div>
                 </div>
             </div>

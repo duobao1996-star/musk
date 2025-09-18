@@ -27,7 +27,9 @@
     "php": ">=8.1",
     "workerman/webman-framework": "^2.1",
     "monolog/monolog": "^2.0",
-    "firebase/php-jwt": "^6.11"
+    "firebase/php-jwt": "^6.11",
+    "webman/database": "^2.1",
+    "webman/think-orm": "^2.1"
   },
   "suggest": {
     "ext-event": "For better performance. "

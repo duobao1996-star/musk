@@ -6,19 +6,18 @@ use support\Request;
 use support\Response;
 use app\model\OperationLog;
 use app\model\Right;
-use app\support\Database;
+use think\facade\Db;
 
 class OperationLogController extends BaseController
 {
     private $logModel;
     private $rightModel;
-    private $db;
 
     public function __construct()
     {
         $this->logModel = new OperationLog();
         $this->rightModel = new Right();
-        $this->db = Database::getInstance();
+        
     }
 
     /**
@@ -121,8 +120,8 @@ class OperationLogController extends BaseController
         }
         
         try {
-            $sql = "SELECT * FROM pay_operation_log WHERE id = ?";
-            $log = $this->logModel->find($sql, [$id]);
+            $row = Db::table('pay_operation_log')->where('id', $id)->first();
+            $log = $row ? (array)$row : null;
             
             if (!$log) {
                 return $this->error('日志不存在', 404);
@@ -162,8 +161,8 @@ class OperationLogController extends BaseController
     public function operationTypes(Request $request): Response
     {
         try {
-            $sql = "SELECT DISTINCT operation_type FROM pay_operation_log ORDER BY operation_type";
-            $types = $this->logModel->findAll($sql);
+            $rows = Db::table('pay_operation_log')->select('operation_type')->distinct()->orderBy('operation_type')->get();
+            $types = array_map(static fn($r)=>(array)$r, $rows);
             
             $typeList = array_column($types, 'operation_type');
             
@@ -180,8 +179,8 @@ class OperationLogController extends BaseController
     public function operationModules(Request $request): Response
     {
         try {
-            $sql = "SELECT DISTINCT operation_module FROM pay_operation_log WHERE operation_module IS NOT NULL ORDER BY operation_module";
-            $modules = $this->logModel->findAll($sql);
+            $rows = Db::table('pay_operation_log')->select('operation_module')->whereNotNull('operation_module')->distinct()->orderBy('operation_module')->get();
+            $modules = array_map(static fn($r)=>(array)$r, $rows);
             
             $moduleList = array_column($modules, 'operation_module');
             
@@ -239,24 +238,92 @@ class OperationLogController extends BaseController
     public function syncRightDescriptions(Request $request): Response
     {
         try {
-            // 获取所有操作日志
-            $sql = "SELECT id, request_url, request_method FROM pay_operation_log WHERE operation_desc IS NULL OR operation_desc = ''";
-            $logs = $this->db->findAll($sql, []);
-            
+            $rows = Db::table('pay_operation_log')
+                ->field(['id','request_url','request_method'])
+                ->whereNull('operation_desc')
+                ->select()
+                ->toArray();
+
             $updated = 0;
-            foreach ($logs as $log) {
-                $right = $this->rightModel->getRightByPath($log['request_url'], $log['request_method']);
-                if ($right && $right['description']) {
-                    $updateSql = "UPDATE pay_operation_log SET operation_desc = ? WHERE id = ?";
-                    $this->db->execute($updateSql, [$right['description'], $log['id']]);
+            foreach ($rows as $log) {
+                $right = $this->rightModel->getRightByPath($log['request_url'], $log['request_method'] ?? 'GET');
+                if ($right && !empty($right['description'])) {
+                    Db::table('pay_operation_log')->where('id', $log['id'])->update(['operation_desc' => $right['description']]);
                     $updated++;
                 }
             }
-            
+
             return $this->success(['updated_count' => $updated], "同步了 {$updated} 条日志描述");
-            
+
         } catch (\Exception $e) {
             return $this->error('同步权限描述失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 软删除回收站：已删除日志列表
+     */
+    public function deletedLogs(Request $request): Response
+    {
+        $page = (int)$request->get('page', 1);
+        $limit = (int)$request->get('limit', 15);
+        try {
+            $data = $this->logModel->getDeletedLogs($page, $limit);
+            $total = Db::table('pay_operation_log')->where('is_del', 0)->count();
+            return $this->paginate($data, $total, $page, $limit, '获取已删除日志成功');
+        } catch (\Exception $e) {
+            return $this->error('获取已删除日志失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 恢复已软删除日志
+     */
+    public function restore(Request $request): Response
+    {
+        $id = (int)$request->post('id');
+        if (!$id) {
+            return $this->error('id 必填', 400);
+        }
+        try {
+            $ok = $this->logModel->restoreLog($id);
+            return $ok ? $this->success([], '恢复成功') : $this->error('恢复失败', 500);
+        } catch (\Exception $e) {
+            return $this->error('恢复失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 彻底删除（物理删除）
+     */
+    public function forceDelete(Request $request): Response
+    {
+        $id = (int)$request->post('id');
+        if (!$id) {
+            return $this->error('id 必填', 400);
+        }
+        try {
+            $ok = $this->logModel->forceDeleteLog($id);
+            return $ok ? $this->success([], '删除成功') : $this->error('删除失败', 500);
+        } catch (\Exception $e) {
+            return $this->error('删除失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 清理已软删除的旧日志（回收站清理）
+     */
+    public function cleanup(Request $request): Response
+    {
+        $days = (int)$request->post('days', 7);
+        if ($days < 1) {
+            $days = 1;
+        }
+        try {
+            $ok = $this->logModel->cleanSoftDeletedLogs($days);
+            return $this->success(['cleaned' => $ok ? 1 : 0, 'days' => $days], '回收站清理完成');
+        } catch (\Exception $e) {
+            return $this->error('回收站清理失败: ' . $e->getMessage(), 500);
         }
     }
 }

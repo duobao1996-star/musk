@@ -11,13 +11,13 @@
 
 - 🔐 **JWT认证系统** - 安全的用户认证和授权
 - 👥 **RBAC权限管理** - 基于角色的访问控制
-- 👤 **用户管理模块** - 管理员、商户、代理管理
+- 👤 **用户管理模块** - 仅管理员管理（已移除普通用户/商户/代理）
 - 📊 **操作日志系统** - 完整的操作审计记录
 - ⚡ **性能监控** - API性能指标实时监控
 - 🗑️ **软删除机制** - 数据安全删除和恢复
 - 📚 **美观的API文档** - 可视化交互式文档
 - 🚀 **Redis缓存支持** - 高性能缓存机制
-- 🏊 **数据库连接池** - 高效的数据库连接管理
+- 🗄️ **数据库访问** - 统一使用 ThinkORM `think\\facade\\Db`（已移除自研连接池与 support\\Db）
 - 🛡️ **安全防护** - CSRF保护、XSS防护、限流
 
 ## 🛠️ 技术栈
@@ -94,7 +94,7 @@ webman-api/
 
 ## 🔧 配置说明
 
-### 数据库配置
+### 数据库配置（ThinkORM）
 
 ```php
 // config/database.php
@@ -150,10 +150,7 @@ curl -X POST http://127.0.0.1:8787/api/login \
 - 令牌刷新机制
 
 ### 2. 用户管理
-- 管理员管理
-- 商户管理
-- 代理管理
-- 密码重置
+- 管理员管理（仅保留管理员体系）
 
 ### 3. 权限管理
 - 角色管理
@@ -177,41 +174,21 @@ curl -X POST http://127.0.0.1:8787/api/login \
 - 批量操作
 - 数据清理
 
-## 🚀 部署指南
+## 🚀 部署指南（推荐）
 
-### 生产环境部署
+- 使用宝塔 Git 自动推送 + 计划任务重启服务；Docker 方案已移除。
 
 ```bash
-# 1. 设置环境变量
-export APP_ENV=production
+# 启动（开发）
+php start.php start
 
-# 2. 启动服务（守护进程模式）
+# 生产：守护进程
 php start.php start -d
 
-# 3. 停止服务
+# 停止/重启/状态
 php start.php stop
-
-# 4. 重启服务
 php start.php restart
-
-# 5. 查看状态
 php start.php status
-```
-
-### Docker部署（可选）
-
-```dockerfile
-FROM php:8.2-cli
-RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libzip-dev \
-    && docker-php-ext-install zip pdo pdo_mysql
-WORKDIR /app
-COPY . .
-RUN composer install --no-dev --optimize-autoloader
-EXPOSE 8787
-CMD ["php", "start.php", "start"]
 ```
 
 ## 🤝 贡献指南

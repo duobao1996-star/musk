@@ -5,18 +5,15 @@ namespace app\controller;
 use support\Request;
 use support\Response;
 use app\middleware\PerformanceMiddleware;
-use app\support\Database;
+use think\facade\Db;
 
 /**
  * 性能监控控制器
  */
 class PerformanceController extends BaseController
 {
-    private Database $db;
-
     public function __construct()
     {
-        $this->db = Database::getInstance();
     }
 
     /**
@@ -91,24 +88,14 @@ class PerformanceController extends BaseController
             $threshold = (float)$request->get('threshold', 1000);
             $limit = (int)$request->get('limit', 50);
             
-            $sql = "
-                SELECT 
-                    endpoint,
-                    method,
-                    response_time,
-                    memory_usage,
-                    peak_memory,
-                    status_code,
-                    user_id,
-                    ip_address,
-                    created_at
-                FROM pay_performance_metrics 
-                WHERE response_time > ? AND is_del = 1
-                ORDER BY response_time DESC
-                LIMIT ?
-            ";
-            
-            $slowQueries = $this->db->findAll($sql, [$threshold, $limit]);
+            $rows = Db::table('pay_performance_metrics')
+                ->field(['endpoint','method','response_time','memory_usage','peak_memory','status_code','user_id','ip_address','created_at'])
+                ->where('response_time','>', $threshold)
+                ->where('is_del', 1)
+                ->order('response_time','desc')
+                ->limit($limit)
+                ->select();
+            $slowQueries = $rows->toArray();
             
             return $this->success([
                 'slow_queries' => $slowQueries,
@@ -132,21 +119,14 @@ class PerformanceController extends BaseController
             
             $dateFormat = $interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d';
             
-            $sql = "
-                SELECT 
-                    DATE_FORMAT(created_at, ?) as time_period,
-                    COUNT(*) as request_count,
-                    AVG(response_time) as avg_response_time,
-                    MAX(response_time) as max_response_time,
-                    AVG(memory_usage) as avg_memory_usage,
-                    COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count
-                FROM pay_performance_metrics 
-                WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-                GROUP BY time_period
-                ORDER BY time_period ASC
-            ";
-            
-            $trends = $this->db->findAll($sql, [$dateFormat, $days]);
+            $rows = Db::table('pay_performance_metrics')
+                ->fieldRaw("DATE_FORMAT(created_at, '{$dateFormat}') as time_period, COUNT(*) as request_count, AVG(response_time) as avg_response_time, MAX(response_time) as max_response_time, AVG(memory_usage) as avg_memory_usage, SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count")
+                ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+                ->where('is_del', 1)
+                ->group('time_period')
+                ->order('time_period','asc')
+                ->select();
+            $trends = $rows->toArray();
             
             return $this->success([
                 'trends' => $trends,
@@ -167,25 +147,26 @@ class PerformanceController extends BaseController
         try {
             $days = (int)$request->get('days', 7);
             
-            $sql = "
-                SELECT 
-                    method,
-                    COUNT(*) as request_count,
-                    AVG(response_time) as avg_response_time,
-                    MIN(response_time) as min_response_time,
-                    MAX(response_time) as max_response_time,
-                    STDDEV(response_time) as response_time_stddev,
-                    AVG(memory_usage) as avg_memory_usage,
-                    AVG(peak_memory) as avg_peak_memory,
-                    COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count,
-                    ROUND(COUNT(CASE WHEN status_code >= 400 THEN 1 END) * 100.0 / COUNT(*), 2) as error_rate
-                FROM pay_performance_metrics 
-                WHERE endpoint = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-                GROUP BY method
-                ORDER BY request_count DESC
-            ";
-            
-            $details = $this->db->findAll($sql, [$endpoint, $days]);
+            // 统计总量用于计算错误率
+            $total = Db::table('pay_performance_metrics')
+                ->where('endpoint', $endpoint)
+                ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+                ->where('is_del', 1)
+                ->count();
+
+            $rows = Db::table('pay_performance_metrics')
+                ->fieldRaw('method, COUNT(*) as request_count, AVG(response_time) as avg_response_time, MIN(response_time) as min_response_time, MAX(response_time) as max_response_time, AVG(memory_usage) as avg_memory_usage, AVG(peak_memory) as avg_peak_memory, SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count')
+                ->where('endpoint', $endpoint)
+                ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+                ->where('is_del', 1)
+                ->group('method')
+                ->order('request_count','desc')
+                ->select();
+            $arr = $rows->toArray();
+            foreach ($arr as &$r) {
+                $r['error_rate'] = $total ? round(($r['error_count'] * 100.0) / $total, 2) : 0;
+            }
+            $details = $arr;
             
             return $this->success([
                 'endpoint' => $endpoint,
@@ -203,21 +184,12 @@ class PerformanceController extends BaseController
      */
     private function getBasicStats(int $days): array
     {
-        $sql = "
-            SELECT 
-                COUNT(*) as total_requests,
-                AVG(response_time) as avg_response_time,
-                MAX(response_time) as max_response_time,
-                AVG(memory_usage) as avg_memory_usage,
-                AVG(peak_memory) as avg_peak_memory,
-                COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count,
-                COUNT(DISTINCT user_id) as active_users,
-                COUNT(DISTINCT ip_address) as unique_ips
-            FROM pay_performance_metrics 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-        ";
-        
-        return $this->db->find($sql, [$days]);
+        $row = Db::table('pay_performance_metrics')
+            ->fieldRaw('COUNT(*) as total_requests, AVG(response_time) as avg_response_time, MAX(response_time) as max_response_time, AVG(memory_usage) as avg_memory_usage, AVG(peak_memory) as avg_peak_memory, SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count, COUNT(DISTINCT user_id) as active_users, COUNT(DISTINCT ip_address) as unique_ips')
+            ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+            ->where('is_del', 1)
+            ->find();
+        return $row ? (array)$row : [];
     }
 
     /**
@@ -225,22 +197,15 @@ class PerformanceController extends BaseController
      */
     private function getEndpointStats(int $days): array
     {
-        $sql = "
-            SELECT 
-                endpoint,
-                method,
-                COUNT(*) as request_count,
-                AVG(response_time) as avg_response_time,
-                MAX(response_time) as max_response_time,
-                COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count
-            FROM pay_performance_metrics 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-            GROUP BY endpoint, method
-            ORDER BY avg_response_time DESC
-            LIMIT 20
-        ";
-        
-        return $this->db->findAll($sql, [$days]);
+        $rows = Db::table('pay_performance_metrics')
+            ->fieldRaw('endpoint, method, COUNT(*) as request_count, AVG(response_time) as avg_response_time, MAX(response_time) as max_response_time, SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count')
+            ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+            ->where('is_del', 1)
+            ->group('endpoint,method')
+            ->order('avg_response_time','desc')
+            ->limit(20)
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -248,18 +213,23 @@ class PerformanceController extends BaseController
      */
     private function getErrorStats(int $days): array
     {
-        $sql = "
-            SELECT 
-                status_code,
-                COUNT(*) as error_count,
-                ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM pay_performance_metrics WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1), 2) as error_percentage
-            FROM pay_performance_metrics 
-            WHERE status_code >= 400 AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-            GROUP BY status_code
-            ORDER BY error_count DESC
-        ";
-        
-        return $this->db->findAll($sql, [$days, $days]);
+        $total = Db::table('pay_performance_metrics')
+            ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+            ->where('is_del', 1)
+            ->count();
+        $rows = Db::table('pay_performance_metrics')
+            ->fieldRaw('status_code, COUNT(*) as error_count')
+            ->where('status_code', '>=', 400)
+            ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+            ->where('is_del', 1)
+            ->group('status_code')
+            ->order('error_count','desc')
+            ->select();
+        $arr = $rows->toArray();
+        foreach ($arr as &$r) {
+            $r['error_percentage'] = $total ? round(($r['error_count'] * 100.0) / $total, 2) : 0;
+        }
+        return $arr;
     }
 
     /**
@@ -267,18 +237,12 @@ class PerformanceController extends BaseController
      */
     private function getMemoryStats(int $days): array
     {
-        $sql = "
-            SELECT 
-                AVG(memory_usage) as avg_memory_usage,
-                MAX(memory_usage) as max_memory_usage,
-                AVG(peak_memory) as avg_peak_memory,
-                MAX(peak_memory) as max_peak_memory,
-                COUNT(CASE WHEN memory_usage > 10240 THEN 1 END) as high_memory_requests
-            FROM pay_performance_metrics 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) AND is_del = 1
-        ";
-        
-        return $this->db->find($sql, [$days]);
+        $row = Db::table('pay_performance_metrics')
+            ->fieldRaw('AVG(memory_usage) as avg_memory_usage, MAX(memory_usage) as max_memory_usage, AVG(peak_memory) as avg_peak_memory, MAX(peak_memory) as max_peak_memory, SUM(CASE WHEN memory_usage > 10240 THEN 1 ELSE 0 END) as high_memory_requests')
+            ->whereRaw("created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)")
+            ->where('is_del', 1)
+            ->find();
+        return $row ? (array)$row : [];
     }
 
     /**

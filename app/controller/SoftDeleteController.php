@@ -48,27 +48,7 @@ class SoftDeleteController extends BaseController
         }
     }
 
-    /**
-     * 获取已软删除的普通用户列表
-     */
-    public function getDeletedUsers(Request $request): Response
-    {
-        try {
-            $page = (int)($request->get('page', 1));
-            $limit = (int)($request->get('limit', 15));
-            
-            $users = $this->userModel->getDeletedUsers($page, $limit);
-            
-            return $this->success([
-                'data' => $users,
-                'page' => $page,
-                'limit' => $limit
-            ], '获取已删除用户列表成功');
-            
-        } catch (\Exception $e) {
-            return $this->error('获取已删除用户列表失败: ' . $e->getMessage(), 500);
-        }
-    }
+    
 
     /**
      * 获取已软删除的权限列表
@@ -139,30 +119,7 @@ class SoftDeleteController extends BaseController
         }
     }
 
-    /**
-     * 恢复普通用户
-     */
-    public function restoreUser(Request $request): Response
-    {
-        try {
-            $id = (int)$request->post('id');
-            
-            if (!$id) {
-                return $this->error('用户ID不能为空', 400);
-            }
-            
-            $result = $this->userModel->restoreUser($id);
-            
-            if ($result) {
-                return $this->success(null, '用户恢复成功');
-            } else {
-                return $this->error('用户恢复失败', 500);
-            }
-            
-        } catch (\Exception $e) {
-            return $this->error('用户恢复失败: ' . $e->getMessage(), 500);
-        }
-    }
+    
 
     /**
      * 恢复权限
@@ -239,30 +196,7 @@ class SoftDeleteController extends BaseController
         }
     }
 
-    /**
-     * 永久删除普通用户
-     */
-    public function forceDeleteUser(Request $request): Response
-    {
-        try {
-            $id = (int)$request->post('id');
-            
-            if (!$id) {
-                return $this->error('用户ID不能为空', 400);
-            }
-            
-            $result = $this->userModel->forceDeleteUser($id);
-            
-            if ($result) {
-                return $this->success(null, '用户永久删除成功');
-            } else {
-                return $this->error('用户永久删除失败', 500);
-            }
-            
-        } catch (\Exception $e) {
-            return $this->error('用户永久删除失败: ' . $e->getMessage(), 500);
-        }
-    }
+    
 
     /**
      * 永久删除权限

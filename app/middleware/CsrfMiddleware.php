@@ -16,8 +16,42 @@ class CsrfMiddleware implements MiddlewareInterface
     private array $excludedPaths = [
         '/api/login',
         '/api/register',
-        '/api/refresh-token'
+        '/api/refresh-token',
+        '/api/logout',
+        '/api/roles',
+        '/api/roles/',
+        '/api/rights',
+        '/api/rights/',
+        '/api/admins',
+        '/api/admins/',
+        '/api/operation-logs',
+        '/api/operation-logs/',
+        '/api/performance',
+        '/api/performance/'
     ];
+
+    /**
+     * 检查路径是否应该排除CSRF验证
+     */
+    private function shouldExcludePath($path): bool
+    {
+        // 所有 API 路径都排除 CSRF 保护
+        if (strpos($path, '/api/') === 0) {
+            return true;
+        }
+        
+        // 静态资源排除
+        if (strpos($path, '/static/') === 0) {
+            return true;
+        }
+        
+        // 文档页面排除
+        if (strpos($path, '/api-docs') === 0) {
+            return true;
+        }
+        
+        return false;
+    }
 
     public function process(Request $request, callable $handler): Response
     {
@@ -25,7 +59,7 @@ class CsrfMiddleware implements MiddlewareInterface
         $method = $request->method();
 
         // 跳过不需要CSRF保护的路径
-        if (in_array($path, $this->excludedPaths)) {
+        if ($this->shouldExcludePath($path)) {
             return $handler($request);
         }
 

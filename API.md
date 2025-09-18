@@ -31,7 +31,7 @@
 ### 核心功能
 
 - ✅ **用户认证**: JWT令牌认证、登录登出
-- ✅ **用户管理**: 管理员、商户、代理管理
+- ✅ **用户管理**: 仅管理员管理（已移除普通用户/商户/代理）
 - ✅ **权限控制**: RBAC角色权限系统
 - ✅ **操作审计**: 完整的操作日志记录
 - ✅ **性能监控**: API性能指标监控
@@ -249,35 +249,6 @@ X-CSRF-Token: <csrf_token>    # POST/PUT/DELETE请求
 }
 ```
 
-### 用户注册
-
-**接口地址**: `POST /api/register`
-
-**接口描述**: 用户注册
-
-**请求参数**:
-
-| 参数名 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| username | string | 是 | 用户名 |
-| email | string | 是 | 邮箱 |
-| password | string | 是 | 密码 |
-| confirm_password | string | 是 | 确认密码 |
-
-**响应示例**:
-```json
-{
-    "code": 201,
-    "message": "注册成功",
-    "data": {
-        "id": 123,
-        "username": "newuser",
-        "email": "newuser@example.com",
-        "created_at": "2024-01-01 12:00:00"
-    },
-    "timestamp": 1640995200
-}
-```
 
 ### 获取当前用户信息
 
@@ -1179,7 +1150,7 @@ X-CSRF-Token: <csrf_token>    # POST/PUT/DELETE请求
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| type | string | 是 | 数据类型 (admins/users/rights/logs) |
+| type | string | 是 | 数据类型 (admins/rights/logs) |
 
 **请求参数**:
 

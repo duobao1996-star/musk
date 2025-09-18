@@ -2,15 +2,12 @@
 
 namespace app\model;
 
-use app\support\Database;
+use think\facade\Db;
 
 class Role
 {
-    private $db;
-
     public function __construct()
     {
-        $this->db = Database::getInstance();
     }
 
     /**
@@ -18,8 +15,12 @@ class Role
      */
     public function getAllRoles()
     {
-        $sql = "SELECT * FROM pay_role WHERE is_del = 1 ORDER BY order_no ASC, id ASC";
-        return $this->db->findAll($sql);
+        $rows = Db::table('pay_role')
+            ->where('is_del', 1)
+            ->order('order_no', 'asc')
+            ->order('id', 'asc')
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -27,8 +28,24 @@ class Role
      */
     public function getRoleById($id)
     {
-        $sql = "SELECT * FROM pay_role WHERE id = ? AND is_del = 1";
-        return $this->db->find($sql, [$id]);
+        $row = Db::table('pay_role')->where('id', $id)->where('is_del', 1)->find();
+        return $row ? (array)$row : null;
+    }
+
+    /**
+     * 检查角色名称是否存在
+     */
+    public function roleNameExists($roleName, $excludeId = null)
+    {
+        $query = Db::table('pay_role')
+            ->where('role_name', $roleName)
+            ->where('is_del', 1);
+            
+        if ($excludeId) {
+            $query->where('id', '<>', $excludeId);
+        }
+        
+        return $query->count() > 0;
     }
 
     /**
@@ -36,11 +53,17 @@ class Role
      */
     public function createRole($data)
     {
-        $sql = "INSERT INTO pay_role (role_name, order_no, description, create_time, is_del) VALUES (?, ?, ?, NOW(), 1)";
-        return $this->db->execute($sql, [
-            $data['role_name'],
-            $data['order_no'] ?? 0,
-            $data['description'] ?? ''
+        // 检查角色名称是否已存在
+        if ($this->roleNameExists($data['role_name'])) {
+            return false; // 返回 false 表示角色名称已存在
+        }
+        
+        return Db::table('pay_role')->insert([
+            'role_name' => $data['role_name'],
+            'order_no' => $data['order_no'] ?? 0,
+            'description' => $data['description'] ?? '',
+            'create_time' => Db::raw('NOW()'),
+            'is_del' => 1,
         ]);
     }
 
@@ -49,13 +72,15 @@ class Role
      */
     public function updateRole($id, $data)
     {
-        $sql = "UPDATE pay_role SET role_name = ?, order_no = ?, description = ?, modify_time = NOW() WHERE id = ? AND is_del = 1";
-        return $this->db->execute($sql, [
-            $data['role_name'],
-            $data['order_no'] ?? 0,
-            $data['description'] ?? '',
-            $id
-        ]);
+        return Db::table('pay_role')
+            ->where('id', $id)
+            ->where('is_del', 1)
+            ->update([
+                'role_name' => $data['role_name'],
+                'order_no' => $data['order_no'] ?? 0,
+                'description' => $data['description'] ?? '',
+                'modify_time' => Db::raw('NOW()'),
+            ]) > 0;
     }
 
     /**
@@ -63,8 +88,7 @@ class Role
      */
     public function deleteRole($id)
     {
-        $sql = "UPDATE pay_role SET is_del = 0 WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_role')->where('id', $id)->update(['is_del' => 0]) > 0;
     }
 
     /**
@@ -72,11 +96,19 @@ class Role
      */
     public function getRoleRights($roleId)
     {
-        $sql = "SELECT r.* FROM pay_right r 
-                INNER JOIN pay_role_right rr ON r.id = rr.right_id 
-                WHERE rr.role_id = ? AND r.menu = 1 
-                ORDER BY r.sort ASC";
-        return $this->db->findAll($sql, [$roleId]);
+        try {
+            // 使用原生SQL查询（ThinkORM）
+            $sql = "SELECT r.* FROM pay_right r 
+                    INNER JOIN pay_role_right rr ON r.id = rr.right_id 
+                    WHERE rr.role_id = :role_id AND r.is_del = 1 
+                    ORDER BY r.sort ASC";
+            $rights = Db::query($sql, ['role_id' => (string)$roleId]);
+            return array_map(static fn($r) => (array)$r, $rights);
+            
+        } catch (\Exception $e) {
+            error_log("获取角色权限失败: " . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -85,23 +117,15 @@ class Role
     public function setRoleRights($roleId, $rightIds)
     {
         // 先删除现有权限
-        $deleteSql = "DELETE FROM pay_role_right WHERE role_id = ?";
-        $this->db->execute($deleteSql, [$roleId]);
+        Db::table('pay_role_right')->where('role_id', $roleId)->delete();
 
         // 添加新权限
         if (!empty($rightIds)) {
-            $insertSql = "INSERT INTO pay_role_right (role_id, right_id) VALUES ";
-            $values = [];
-            $params = [];
-            
+            $rows = [];
             foreach ($rightIds as $rightId) {
-                $values[] = "(?, ?)";
-                $params[] = $roleId;
-                $params[] = $rightId;
+                $rows[] = ['role_id' => (string)$roleId, 'right_id' => $rightId];
             }
-            
-            $insertSql .= implode(', ', $values);
-            $this->db->execute($insertSql, $params);
+            Db::table('pay_role_right')->insertAll($rows);
         }
         
         return true;
@@ -112,9 +136,7 @@ class Role
      */
     public function roleExists($id)
     {
-        $sql = "SELECT COUNT(*) as count FROM pay_role WHERE id = ? AND is_del = 1";
-        $result = $this->db->find($sql, [$id]);
-        return $result['count'] > 0;
+        return Db::table('pay_role')->where('id', $id)->where('is_del', 1)->count() > 0;
     }
 
     /**
@@ -122,10 +144,11 @@ class Role
      */
     public function getRoleStats()
     {
-        $sql = "SELECT 
-                    COUNT(*) as total_roles,
-                    COUNT(CASE WHEN create_time >= CURDATE() THEN 1 END) as today_new
+        $sql = "SELECT COUNT(*) as total_roles,
+                       SUM(CASE WHEN create_time >= CURDATE() THEN 1 ELSE 0 END) as today_new
                 FROM pay_role WHERE is_del = 1";
-        return $this->db->find($sql);
+        $rows = Db::query($sql);
+        $row = $rows[0] ?? null;
+        return $row ? (array)$row : ['total_roles' => 0, 'today_new' => 0];
     }
 }

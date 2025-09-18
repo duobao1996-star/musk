@@ -1,0 +1,201 @@
+{
+  "info": {
+    "name": "Webman API 2.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "c3e5c9f6-3f7b-4f6a-9d1b-8a2f0e0a0001"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (save token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/login", "host": ["{{baseUrl}}"], "path": ["api","login"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"Admin@12345\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const token = json.data && (json.data.token || json.data.access_token);",
+                  "if (token) { pm.environment.set('token', token); }",
+                  "pm.test('Got token', function(){ pm.expect(!!token).to.be.true; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/me", "host": ["{{baseUrl}}"], "path": ["api","me"]}
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/refresh-token", "host": ["{{baseUrl}}"], "path": ["api","refresh-token"]}
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/logout", "host": ["{{baseUrl}}"], "path": ["api","logout"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["api","roles"], "query": [{"key":"page","value":"1"},{"key":"limit","value":"10"}]}
+          }
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"}, {"key":"Content-Type","value":"application/json"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles", "host": ["{{baseUrl}}"], "path": ["api","roles"]},
+            "body": {"mode":"raw","raw":"{\n  \"role_name\": \"编辑员\",\n  \"description\": \"内容编辑权限\",\n  \"order_no\": 10\n}"}
+          }
+        },
+        {
+          "name": "Role Detail",
+          "request": {
+            "method": "GET",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/1", "host": ["{{baseUrl}}"], "path": ["api","roles","1"]}
+          }
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"}, {"key":"Content-Type","value":"application/json"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/1", "host": ["{{baseUrl}}"], "path": ["api","roles","1"]},
+            "body": {"mode":"raw","raw":"{\n  \"role_name\": \"编辑员(改)\"\n}"}
+          }
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/1", "host": ["{{baseUrl}}"], "path": ["api","roles","1"]}
+          }
+        },
+        {
+          "name": "Get Role Rights",
+          "request": {
+            "method": "GET",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/1/rights", "host": ["{{baseUrl}}"], "path": ["api","roles","1","rights"]}
+          }
+        },
+        {
+          "name": "Set Role Rights",
+          "request": {
+            "method": "POST",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"}, {"key":"Content-Type","value":"application/json"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/1/rights", "host": ["{{baseUrl}}"], "path": ["api","roles","1","rights"]},
+            "body": {"mode":"raw","raw":"{\n  \"rights\": [1,2,3]\n}"}
+          }
+        },
+        {
+          "name": "All Rights Tree",
+          "request": {
+            "method": "GET",
+            "header": [ {"key": "Authorization", "value": "Bearer {{token}}"} ],
+            "url": {"raw": "{{baseUrl}}/api/roles/all-rights-tree", "host": ["{{baseUrl}}"], "path": ["api","roles","all-rights-tree"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "List Permissions",
+          "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/permissions?page=1&limit=10","host":["{{baseUrl}}"],"path":["api","permissions"],"query":[{"key":"page","value":"1"},{"key":"limit","value":"10"}]}}
+        },
+        {
+          "name": "Create Permission",
+          "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/permissions","host":["{{baseUrl}}"],"path":["api","permissions"]},"body":{"mode":"raw","raw":"{\n  \"right_name\": \"系统管理\",\n  \"description\": \"系统模块\",\n  \"menu\": 1,\n  \"sort\": 1\n}"}}
+        },
+        {
+          "name": "Update Permission",
+          "request": {"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/permissions/1","host":["{{baseUrl}}"],"path":["api","permissions","1"]},"body":{"mode":"raw","raw":"{\n  \"right_name\": \"系统管理(改)\"\n}"}}
+        },
+        {"name":"Delete Permission","request": {"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/permissions/1","host":["{{baseUrl}}"],"path":["api","permissions","1"]}}},
+        {"name":"Permissions Tree","request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/permissions/tree","host":["{{baseUrl}}"],"path":["api","permissions","tree"]}}},
+        {"name":"Menu Permissions","request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/permissions/menu","host":["{{baseUrl}}"],"path":["api","permissions","menu"]}}}
+      ]
+    },
+    {
+      "name": "Operation Logs",
+      "item": [
+        {"name":"List Logs","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/operation-logs?page=1&limit=10","host":["{{baseUrl}}"],"path":["api","operation-logs"],"query":[{"key":"page","value":"1"},{"key":"limit","value":"10"}]}}},
+        {"name":"Stats","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/operation-logs/stats","host":["{{baseUrl}}"],"path":["api","operation-logs","stats"]}}},
+        {"name":"Clean Old Logs","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/operation-logs/clean","host":["{{baseUrl}}"],"path":["api","operation-logs","clean"]},"body":{"mode":"raw","raw":"{\n  \"days\": 30\n}"}}}
+      ]
+    },
+    {
+      "name": "Performance",
+      "item": [
+        {"name":"Stats","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/performance/stats","host":["{{baseUrl}}"],"path":["api","performance","stats"]}}},
+        {"name":"Slow Queries","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/performance/slow-queries?threshold=1000&limit=20","host":["{{baseUrl}}"],"path":["api","performance","slow-queries"],"query":[{"key":"threshold","value":"1000"},{"key":"limit","value":"20"}]}}}
+      ]
+    },
+    {
+      "name": "Soft Delete",
+      "item": [
+        {"name":"Deleted Logs","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{baseUrl}}/api/soft-delete/logs","host":["{{baseUrl}}"],"path":["api","soft-delete","logs"]}}},
+        {"name":"Restore Log","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/soft-delete/logs/restore","host":["{{baseUrl}}"],"path":["api","soft-delete","logs","restore"]},"body":{"mode":"raw","raw":"{\n  \"id\": 1\n}"}}},
+        {"name":"Force Delete Log","request":{"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/soft-delete/force-delete/log","host":["{{baseUrl}}"],"path":["api","soft-delete","force-delete","log"]},"body":{"mode":"raw","raw":"{\n  \"id\": 1\n}"}}},
+        {"name":"Cleanup","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{baseUrl}}/api/soft-delete/cleanup","host":["{{baseUrl}}"],"path":["api","soft-delete","cleanup"]},"body":{"mode":"raw","raw":"{\n  \"days\": 7\n}"}}}
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {"type":"text/javascript","exec":[
+        "// Attach Authorization automatically if token exists",
+        "if (pm.environment.get('token')) {",
+        "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('token') });",
+        "}"
+      ]}
+    }
+  ]
+}
+
+

@@ -2,17 +2,15 @@
 
 namespace app\model;
 
-use app\support\Database;
+use think\facade\Db;
 use app\model\Right;
 
 class OperationLog
 {
-    private $db;
     private $rightModel;
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
         $this->rightModel = new Right();
     }
 
@@ -21,26 +19,20 @@ class OperationLog
      */
     public function log($data)
     {
-        $sql = "INSERT INTO pay_operation_log 
-                (admin_id, admin_name, operation_type, operation_module, operation_desc, 
-                 request_method, request_url, request_params, response_code, response_msg, 
-                 ip_address, user_agent, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        return $this->db->execute($sql, [
-            $data['admin_id'] ?? null,
-            $data['admin_name'] ?? null,
-            $data['operation_type'],
-            $data['operation_module'] ?? null,
-            $data['operation_desc'] ?? null,
-            $data['request_method'] ?? null,
-            $data['request_url'] ?? null,
-            $data['request_params'] ?? null,
-            $data['response_code'] ?? null,
-            $data['response_msg'] ?? null,
-            $data['ip_address'] ?? null,
-            $data['user_agent'] ?? null,
-            $data['status'] ?? 1
+        return Db::table('pay_operation_log')->insert([
+            'admin_id' => $data['admin_id'] ?? null,
+            'admin_name' => $data['admin_name'] ?? null,
+            'operation_type' => $data['operation_type'],
+            'operation_module' => $data['operation_module'] ?? null,
+            'operation_desc' => $data['operation_desc'] ?? null,
+            'request_method' => $data['request_method'] ?? null,
+            'request_url' => $data['request_url'] ?? null,
+            'request_params' => $data['request_params'] ?? null,
+            'response_code' => $data['response_code'] ?? null,
+            'response_msg' => $data['response_msg'] ?? null,
+            'ip_address' => $data['ip_address'] ?? null,
+            'user_agent' => $data['user_agent'] ?? null,
+            'status' => $data['status'] ?? 1,
         ]);
     }
 
@@ -60,6 +52,25 @@ class OperationLog
             'ip_address' => $ip,
             'user_agent' => $userAgent,
             'status' => $status ? 1 : 0
+        ]);
+    }
+
+    /**
+     * 记录登录失败（兼容旧调用名）
+     */
+    public function logLoginFailure(string $username, string $ip, ?string $userAgent = null, string $message = '用户名或密码错误')
+    {
+        return $this->log([
+            'admin_id' => null,
+            'admin_name' => $username,
+            'operation_type' => 'login',
+            'operation_module' => 'auth',
+            'operation_desc' => '登录失败: ' . $message,
+            'request_method' => 'POST',
+            'request_url' => '/api/login',
+            'ip_address' => $ip,
+            'user_agent' => $userAgent,
+            'status' => 0
         ]);
     }
 
@@ -129,51 +140,28 @@ class OperationLog
     public function getLogs($page = 1, $limit = 15, $filters = [])
     {
         $offset = ($page - 1) * $limit;
-        
-        // 构建查询条件
-        $where = "WHERE 1=1";
-        $params = [];
-        
+        $query = Db::table('pay_operation_log')->where('is_del', 1);
         if (!empty($filters['admin_id'])) {
-            $where .= " AND admin_id = ?";
-            $params[] = $filters['admin_id'];
+            $query->where('admin_id', $filters['admin_id']);
         }
-        
         if (!empty($filters['operation_type'])) {
-            $where .= " AND operation_type = ?";
-            $params[] = $filters['operation_type'];
+            $query->where('operation_type', $filters['operation_type']);
         }
-        
         if (!empty($filters['operation_module'])) {
-            $where .= " AND operation_module = ?";
-            $params[] = $filters['operation_module'];
+            $query->where('operation_module', $filters['operation_module']);
         }
-        
         if (!empty($filters['status'])) {
-            $where .= " AND status = ?";
-            $params[] = $filters['status'];
+            $query->where('status', $filters['status']);
         }
-        
         if (!empty($filters['start_time'])) {
-            $where .= " AND operation_time >= ?";
-            $params[] = $filters['start_time'];
+            $query->where('operation_time', '>=', $filters['start_time']);
         }
-        
         if (!empty($filters['end_time'])) {
-            $where .= " AND operation_time <= ?";
-            $params[] = $filters['end_time'];
+            $query->where('operation_time', '<=', $filters['end_time']);
         }
-        
-        // 添加软删除条件
-        $where .= " AND is_del = 1";
-        
-        // 查询总数
-        $countSql = "SELECT COUNT(*) as total FROM pay_operation_log {$where}";
-        $total = $this->db->find($countSql, $params)['total'];
-        
-        // 查询数据
-        $sql = "SELECT * FROM pay_operation_log {$where} ORDER BY operation_time DESC LIMIT {$offset}, {$limit}";
-        $logs = $this->db->findAll($sql, $params);
+        $total = (clone $query)->count();
+        $rows = $query->order('operation_time', 'desc')->limit($offset, $limit)->select();
+        $logs = $rows->toArray();
         
         return [
             'data' => $logs,
@@ -188,44 +176,30 @@ class OperationLog
      */
     public function getStats($filters = [])
     {
-        $where = "WHERE is_del = 1";
-        $params = [];
-        
+        $query = Db::table('pay_operation_log')->where('is_del', 1);
         if (!empty($filters['start_time'])) {
-            $where .= " AND operation_time >= ?";
-            $params[] = $filters['start_time'];
+            $query->where('operation_time', '>=', $filters['start_time']);
         }
-        
         if (!empty($filters['end_time'])) {
-            $where .= " AND operation_time <= ?";
-            $params[] = $filters['end_time'];
+            $query->where('operation_time', '<=', $filters['end_time']);
         }
-        
         $stats = [];
-        
-        // 总操作数
-        $total = $this->db->find("SELECT COUNT(*) as total FROM pay_operation_log {$where}", $params)['total'];
-        $stats['total_operations'] = $total;
-        
-        // 成功操作数
-        $success = $this->db->find("SELECT COUNT(*) as total FROM pay_operation_log {$where} AND status = 1", $params)['total'];
-        $stats['success_operations'] = $success;
-        
-        // 失败操作数
-        $failed = $this->db->find("SELECT COUNT(*) as total FROM pay_operation_log {$where} AND status = 0", $params)['total'];
-        $stats['failed_operations'] = $failed;
-        
-        // 按操作类型统计
-        $typeStats = $this->db->findAll("SELECT operation_type, COUNT(*) as count FROM pay_operation_log {$where} GROUP BY operation_type", $params);
-        $stats['type_stats'] = $typeStats;
-        
-        // 按模块统计
-        $moduleStats = $this->db->findAll("SELECT operation_module, COUNT(*) as count FROM pay_operation_log {$where} GROUP BY operation_module", $params);
-        $stats['module_stats'] = $moduleStats;
-        
-        // 今日操作数
-        $today = $this->db->find("SELECT COUNT(*) as total FROM pay_operation_log WHERE DATE(operation_time) = CURDATE()")['total'];
-        $stats['today_operations'] = $today;
+        $stats['total_operations'] = (clone $query)->count();
+        $stats['success_operations'] = (clone $query)->where('status', 1)->count();
+        $stats['failed_operations'] = (clone $query)->where('status', 0)->count();
+        $stats['type_stats'] = Db::table('pay_operation_log')
+            ->fieldRaw('operation_type, COUNT(*) as count')
+            ->where('is_del', 1)
+            ->group('operation_type')
+            ->select()
+            ->toArray();
+        $stats['module_stats'] = Db::table('pay_operation_log')
+            ->fieldRaw('operation_module, COUNT(*) as count')
+            ->where('is_del', 1)
+            ->group('operation_module')
+            ->select()
+            ->toArray();
+        $stats['today_operations'] = Db::table('pay_operation_log')->whereDay('operation_time', 'today')->count();
         
         return $stats;
     }
@@ -235,8 +209,9 @@ class OperationLog
      */
     public function cleanOldLogs($days = 30)
     {
-        $sql = "DELETE FROM pay_operation_log WHERE operation_time < DATE_SUB(NOW(), INTERVAL ? DAY)";
-        return $this->db->execute($sql, [$days]);
+        return Db::table('pay_operation_log')
+            ->whereRaw('operation_time < DATE_SUB(NOW(), INTERVAL ? DAY)', [$days])
+            ->delete() > 0;
     }
 
     /**
@@ -247,8 +222,10 @@ class OperationLog
      */
     public function softDeleteLog(int $id): bool
     {
-        $sql = "UPDATE pay_operation_log SET is_del = 0, delete_time = NOW() WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_operation_log')->where('id', $id)->update([
+            'is_del' => 0,
+            'delete_time' => Db::raw('NOW()'),
+        ]) > 0;
     }
 
     /**
@@ -259,8 +236,10 @@ class OperationLog
      */
     public function restoreLog(int $id): bool
     {
-        $sql = "UPDATE pay_operation_log SET is_del = 1, delete_time = NULL WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_operation_log')->where('id', $id)->update([
+            'is_del' => 1,
+            'delete_time' => null,
+        ]) > 0;
     }
 
     /**
@@ -271,8 +250,7 @@ class OperationLog
      */
     public function forceDeleteLog(int $id): bool
     {
-        $sql = "DELETE FROM pay_operation_log WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_operation_log')->where('id', $id)->delete() > 0;
     }
 
     /**
@@ -285,8 +263,14 @@ class OperationLog
     public function getDeletedLogs(int $page = 1, int $limit = 15): array
     {
         $offset = ($page - 1) * $limit;
-        $sql = "SELECT id, admin_id, admin_name, operation_type, operation_time, delete_time FROM pay_operation_log WHERE is_del = 0 ORDER BY delete_time DESC LIMIT {$offset}, {$limit}";
-        return $this->db->findAll($sql);
+        $rows = Db::table('pay_operation_log')
+            ->field(['id','admin_id','admin_name','operation_type','operation_time','delete_time'])
+            ->where('is_del', 0)
+            ->order('delete_time', 'desc')
+            ->limit($offset, $limit)
+            ->select()
+            ->toArray();
+        return $rows;
     }
 
     /**
@@ -301,9 +285,9 @@ class OperationLog
             return false;
         }
 
-        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-        $sql = "UPDATE pay_operation_log SET is_del = 0, delete_time = NOW() WHERE id IN ({$placeholders})";
-        return $this->db->execute($sql, $ids);
+        return Db::table('pay_operation_log')
+            ->whereIn('id', $ids)
+            ->update(['is_del' => 0, 'delete_time' => Db::raw('NOW()')]) > 0;
     }
 
     /**
@@ -314,7 +298,9 @@ class OperationLog
      */
     public function cleanSoftDeletedLogs(int $days = 7): bool
     {
-        $sql = "DELETE FROM pay_operation_log WHERE is_del = 0 AND delete_time < DATE_SUB(NOW(), INTERVAL ? DAY)";
-        return $this->db->execute($sql, [$days]);
+        return Db::table('pay_operation_log')
+            ->where('is_del', 0)
+            ->whereRaw('delete_time < DATE_SUB(NOW(), INTERVAL ? DAY)', [$days])
+            ->delete() > 0;
     }
 }

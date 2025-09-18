@@ -2,15 +2,14 @@
 
 namespace app\model;
 
-use app\support\Database;
+use think\facade\Db; // 使用 ThinkPHP 的 Db 作为默认别名
 
 class Right
 {
-    private $db;
+    private static array $rightCache = [];
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
     }
 
     /**
@@ -18,8 +17,8 @@ class Right
      */
     public function getRightByName($rightName)
     {
-        $sql = "SELECT * FROM pay_right WHERE right_name = ?";
-        return $this->db->find($sql, [$rightName]);
+        $row = Db::table('pay_right')->where('right_name', $rightName)->find();
+        return $row ? (array)$row : null;
     }
 
     /**
@@ -27,8 +26,8 @@ class Right
      */
     public function getRightById($id)
     {
-        $sql = "SELECT * FROM pay_right WHERE id = ?";
-        return $this->db->find($sql, [$id]);
+        $row = Db::table('pay_right')->where('id', $id)->find();
+        return $row ? (array)$row : null;
     }
 
     /**
@@ -36,8 +35,12 @@ class Right
      */
     public function getAllRights()
     {
-        $sql = "SELECT * FROM pay_right WHERE is_del = 1 ORDER BY sort ASC";
-        return $this->db->findAll($sql);
+        // 使用 ThinkPHP 的数据库语法，指定完整表名
+        $rows = Db::table('pay_right')
+            ->where('is_del', 1)
+            ->order('sort', 'asc')
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -45,8 +48,12 @@ class Right
      */
     public function getMenuRights()
     {
-        $sql = "SELECT * FROM pay_right WHERE menu = 1 AND is_del = 1 ORDER BY sort ASC";
-        return $this->db->findAll($sql);
+        $rows = Db::table('pay_right')
+            ->where('menu', 1)
+            ->where('is_del', 1)
+            ->order('sort', 'asc')
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -83,14 +90,18 @@ class Right
      */
     public function createRight($data)
     {
-        $sql = "INSERT INTO pay_right (pid, right_name, description, menu, sort, icon) VALUES (?, ?, ?, ?, ?, ?)";
-        return $this->db->execute($sql, [
-            $data['pid'] ?? null,
-            $data['right_name'],
-            $data['description'] ?? '',
-            $data['menu'] ?? 1,
-            $data['sort'] ?? 0,
-            $data['icon'] ?? null
+        // 避免重复创建
+        $exists = Db::table('pay_right')->where('right_name', $data['right_name'])->where('is_del', 1)->count();
+        if ($exists > 0) {
+            return false;
+        }
+        return Db::table('pay_right')->insert([
+            'pid' => $data['pid'] ?? null,
+            'right_name' => $data['right_name'],
+            'description' => $data['description'] ?? '',
+            'menu' => $data['menu'] ?? 1,
+            'sort' => $data['sort'] ?? 0,
+            'icon' => $data['icon'] ?? null,
         ]);
     }
 
@@ -99,16 +110,26 @@ class Right
      */
     public function updateRight($id, $data)
     {
-        $sql = "UPDATE pay_right SET pid = ?, right_name = ?, description = ?, menu = ?, sort = ?, icon = ? WHERE id = ?";
-        return $this->db->execute($sql, [
-            $data['pid'] ?? null,
-            $data['right_name'],
-            $data['description'] ?? '',
-            $data['menu'] ?? 1,
-            $data['sort'] ?? 0,
-            $data['icon'] ?? null,
-            $id
-        ]);
+        // 名称唯一（排除自身）
+        if (!empty($data['right_name'])) {
+            $exists = Db::table('pay_right')
+                ->where('right_name', $data['right_name'])
+                ->where('is_del', 1)
+                ->where('id', '<>', $id)
+                ->count();
+            if ($exists > 0) {
+                return false;
+            }
+        }
+        $update = [
+            'pid' => $data['pid'] ?? null,
+            'right_name' => $data['right_name'],
+            'description' => $data['description'] ?? '',
+            'menu' => $data['menu'] ?? 1,
+            'sort' => $data['sort'] ?? 0,
+            'icon' => $data['icon'] ?? null,
+        ];
+        return Db::table('pay_right')->where('id', $id)->update($update) > 0;
     }
 
     /**
@@ -116,8 +137,10 @@ class Right
      */
     public function deleteRight($id)
     {
-        $sql = "UPDATE pay_right SET is_del = 0, delete_time = NOW() WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_right')->where('id', $id)->update([
+            'is_del' => 0,
+            'delete_time' => new \think\db\Raw('NOW()'),
+        ]) > 0;
     }
 
     /**
@@ -128,8 +151,10 @@ class Right
      */
     public function restoreRight(int $id): bool
     {
-        $sql = "UPDATE pay_right SET is_del = 1, delete_time = NULL WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_right')->where('id', $id)->update([
+            'is_del' => 1,
+            'delete_time' => null,
+        ]) > 0;
     }
 
     /**
@@ -140,8 +165,7 @@ class Right
      */
     public function forceDeleteRight(int $id): bool
     {
-        $sql = "DELETE FROM pay_right WHERE id = ?";
-        return $this->db->execute($sql, [$id]);
+        return Db::table('pay_right')->where('id', $id)->delete() > 0;
     }
 
     /**
@@ -149,8 +173,12 @@ class Right
      */
     public function getChildRights($pid)
     {
-        $sql = "SELECT * FROM pay_right WHERE pid = ? AND is_del = 1 ORDER BY sort ASC";
-        return $this->db->findAll($sql, [$pid]);
+        $rows = Db::table('pay_right')
+            ->where('pid', $pid)
+            ->where('is_del', 1)
+            ->order('sort', 'asc')
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -158,9 +186,8 @@ class Right
      */
     public function rightExists($id)
     {
-        $sql = "SELECT COUNT(*) as count FROM pay_right WHERE id = ? AND is_del = 1";
-        $result = $this->db->find($sql, [$id]);
-        return $result['count'] > 0;
+        $count = Db::table('pay_right')->where('id', $id)->where('is_del', 1)->count();
+        return $count > 0;
     }
 
     /**
@@ -173,8 +200,13 @@ class Right
     public function getDeletedRights(int $page = 1, int $limit = 15): array
     {
         $offset = ($page - 1) * $limit;
-        $sql = "SELECT id, pid, right_name, description, menu, delete_time FROM pay_right WHERE is_del = 0 ORDER BY delete_time DESC LIMIT {$offset}, {$limit}";
-        return $this->db->findAll($sql);
+        $rows = Db::table('pay_right')
+            ->field(['id','pid','right_name','description','menu','delete_time'])
+            ->where('is_del', 0)
+            ->order('delete_time', 'desc')
+            ->limit($offset, $limit)
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -182,74 +214,34 @@ class Right
      */
     public function getRightByPath($path, $method)
     {
-        // 构建权限名称映射
-        $rightMapping = $this->getRightMapping();
-        
         $pathKey = $this->normalizePath($path);
         $methodKey = strtoupper($method);
-        
-        
-        $rightName = $rightMapping[$pathKey][$methodKey] ?? null;
-        
-        if ($rightName) {
-            return $this->getRightByName($rightName);
+
+        // 进程内短缓存（key: method|path）
+        $cacheKey = $methodKey . '|' . $pathKey;
+        if (isset(self::$rightCache[$cacheKey])) {
+            return self::$rightCache[$cacheKey];
         }
-        
-        return null;
+
+        // 1) 精确匹配 path + method
+        try {
+            $row = Db::table('pay_right')
+                ->where('path', $pathKey)
+                ->where('method', $methodKey)
+                ->where('is_del', 1)
+                ->find();
+            if ($row) {
+                return self::$rightCache[$cacheKey] = (array)$row;
+            }
+        } catch (\Throwable $e) {
+            // 忽略，回退到映射逻辑
+        }
+
+        // 2) 取消旧映射回退：未匹配则返回 null，由上层生成默认描述
+        return self::$rightCache[$cacheKey] = null;
     }
 
-    /**
-     * 获取权限映射表
-     */
-    private function getRightMapping()
-    {
-        return [
-            '/api/admin' => [
-                'GET' => 'admin_list',
-                'POST' => 'admin_add'
-            ],
-            '/api/admin/stats' => [
-                'GET' => 'admin_stats'
-            ],
-            '/api/merchant' => [
-                'GET' => 'merchant_list',
-                'POST' => 'merchant_add'
-            ],
-            '/api/merchant/stats' => [
-                'GET' => 'merchant_stats'
-            ],
-            '/api/merchant/reset-password' => [
-                'POST' => 'merchant_reset_password'
-            ],
-            '/api/merchant/toggle-status' => [
-                'POST' => 'merchant_toggle_status'
-            ],
-            '/api/logs' => [
-                'GET' => 'logs_list'
-            ],
-            '/api/logs/stats' => [
-                'GET' => 'logs_stats'
-            ],
-            '/api/logs/login' => [
-                'GET' => 'logs_login'
-            ],
-            '/api/logs/clean' => [
-                'POST' => 'logs_clean'
-            ],
-            '/api/logs/sync-descriptions' => [
-                'POST' => 'logs_sync'
-            ],
-            '/api/logs/right-by-url' => [
-                'GET' => 'logs_right_by_url'
-            ],
-            '/api/users' => [
-                'GET' => 'user_list'
-            ],
-            '/api/user' => [
-                'POST' => 'user_add'
-            ]
-        ];
-    }
+    // 老的映射表已废弃
 
     /**
      * 标准化路径

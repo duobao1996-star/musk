@@ -6,19 +6,21 @@ use support\Request;
 use support\Response;
 use app\model\Right;
 use app\model\RoleRight;
-use app\support\Database;
+use app\model\OperationLog;
+use think\facade\Db;
 
 class PermissionController extends BaseController
 {
     private $rightModel;
     private $roleRightModel;
-    private $db;
+    private $logModel;
 
     public function __construct()
     {
         $this->rightModel = new Right();
         $this->roleRightModel = new RoleRight();
-        $this->db = Database::getInstance();
+        $this->logModel = new OperationLog();
+        
     }
 
     /**
@@ -32,25 +34,21 @@ class PermissionController extends BaseController
             $search = $request->get('search', '');
             $menu = $request->get('menu', '');
 
-            $where = "WHERE 1=1";
-            $params = [];
-
+            $query = Db::table('pay_right')->where('is_del', 1);
             if (!empty($search)) {
-                $where .= " AND (right_name LIKE ? OR description LIKE ?)";
-                $params[] = "%{$search}%";
-                $params[] = "%{$search}%";
+                $query->where(function($q) use ($search) {
+                    $q->whereLike('right_name', "%{$search}%")
+                      ->whereOrLike('description', "%{$search}%");
+                });
             }
-
             if ($menu !== '') {
-                $where .= " AND menu = ?";
-                $params[] = $menu;
+                $query->where('menu', $menu);
             }
 
-            $sql = "SELECT * FROM pay_right {$where} ORDER BY sort ASC, id ASC";
-            $totalSql = "SELECT COUNT(*) as total FROM pay_right {$where}";
-            
-            $total = $this->db->find($totalSql, $params)['total'];
-            $rights = $this->db->findAll($sql, $params);
+            $total = (clone $query)->count();
+            $rights = $query->order('sort','asc')->order('id','asc')
+                ->limit(($page-1)*$limit,$limit)->select();
+            $rights = $rights->toArray();
 
             return $this->paginate($rights, $total, $page, $limit, '获取权限列表成功');
 
@@ -116,9 +114,10 @@ class PermissionController extends BaseController
      */
     public function store(Request $request): Response
     {
+        // 更新允许部分字段，可选校验
         $errors = $this->validate($request, [
-            'right_name' => 'required|min:1',
-            'description' => 'required|min:1'
+            'right_name' => 'min:1',
+            'description' => 'min:0'
         ]);
 
         if (!empty($errors)) {
@@ -127,17 +126,35 @@ class PermissionController extends BaseController
 
         try {
             $data = [
-                'pid' => $request->post('pid'),
-                'right_name' => $request->post('right_name'),
-                'description' => $request->post('description'),
-                'menu' => $request->post('menu', 1),
-                'sort' => $request->post('sort', 0),
-                'icon' => $request->post('icon')
+                'pid' => $request->input('pid'),
+                'right_name' => $request->input('right_name'),
+                'description' => $request->input('description'),
+                'menu' => $request->input('menu', 1),
+                'sort' => $request->input('sort', 0),
+                'icon' => $request->input('icon')
             ];
 
             $result = $this->rightModel->createRight($data);
             
             if ($result) {
+                // 操作日志
+                $adminId = $request->user->user_id ?? null;
+                $adminName = $request->user->username ?? '';
+                $this->logModel->logOperation(
+                    $adminId,
+                    $adminName,
+                    'create',
+                    'permission',
+                    '创建权限',
+                    [
+                        'method' => $request->method(),
+                        'url' => $request->path(),
+                        'params' => json_encode($data, JSON_UNESCAPED_UNICODE),
+                        'ip' => $request->getRealIp(),
+                        'user_agent' => $request->header('User-Agent')
+                    ],
+                    ['code' => 200, 'message' => '创建权限成功']
+                );
                 return $this->success([], '创建权限成功');
             } else {
                 return $this->error('创建权限失败', 500);
@@ -184,6 +201,24 @@ class PermissionController extends BaseController
             $result = $this->rightModel->updateRight($id, $data);
             
             if ($result) {
+                // 操作日志
+                $adminId = $request->user->user_id ?? null;
+                $adminName = $request->user->username ?? '';
+                $this->logModel->logOperation(
+                    $adminId,
+                    $adminName,
+                    'update',
+                    'permission',
+                    '更新权限',
+                    [
+                        'method' => $request->method(),
+                        'url' => $request->path(),
+                        'params' => json_encode($data, JSON_UNESCAPED_UNICODE),
+                        'ip' => $request->getRealIp(),
+                        'user_agent' => $request->header('User-Agent')
+                    ],
+                    ['code' => 200, 'message' => '更新权限成功']
+                );
                 return $this->success([], '更新权限成功');
             } else {
                 return $this->error('更新权限失败', 500);
@@ -221,6 +256,24 @@ class PermissionController extends BaseController
             $result = $this->rightModel->deleteRight($id);
             
             if ($result) {
+                // 操作日志
+                $adminId = $request->user->user_id ?? null;
+                $adminName = $request->user->username ?? '';
+                $this->logModel->logOperation(
+                    $adminId,
+                    $adminName,
+                    'delete',
+                    'permission',
+                    '删除权限',
+                    [
+                        'method' => $request->method(),
+                        'url' => $request->path(),
+                        'params' => json_encode(['id'=>$id], JSON_UNESCAPED_UNICODE),
+                        'ip' => $request->getRealIp(),
+                        'user_agent' => $request->header('User-Agent')
+                    ],
+                    ['code' => 200, 'message' => '删除权限成功']
+                );
                 return $this->success([], '删除权限成功');
             } else {
                 return $this->error('删除权限失败', 500);
@@ -237,12 +290,13 @@ class PermissionController extends BaseController
     public function stats(Request $request): Response
     {
         try {
-            $sql = "SELECT 
-                        COUNT(*) as total_rights,
-                        COUNT(CASE WHEN menu = 1 THEN 1 END) as menu_rights,
-                        COUNT(CASE WHEN menu = 0 THEN 1 END) as action_rights
+            $sql = "SELECT COUNT(*) as total_rights,
+                           SUM(CASE WHEN menu = 1 THEN 1 ELSE 0 END) as menu_rights,
+                           SUM(CASE WHEN menu = 0 THEN 1 ELSE 0 END) as action_rights
                     FROM pay_right";
-            $stats = $this->db->find($sql);
+            $res = Db::query($sql);
+            $row = $res[0] ?? null;
+            $stats = $row ? (array)$row : ['total_rights'=>0,'menu_rights'=>0,'action_rights'=>0];
 
             return $this->success($stats, '获取权限统计成功');
 

@@ -7,6 +7,7 @@ use Webman\Http\Response;
 use Webman\Http\Request;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use app\model\User;
 
 class JwtMiddleware implements MiddlewareInterface
 {
@@ -57,6 +58,18 @@ class JwtMiddleware implements MiddlewareInterface
         try {
             // 验证JWT令牌
             $decoded = JWT::decode($token, new Key($this->secretKey, 'HS256'));
+            
+            // 验证令牌是否在数据库中有效
+            $userModel = new User();
+            $user = $userModel->validateToken($token);
+            
+            if (!$user) {
+                return json([
+                    'code' => 401,
+                    'message' => '令牌已失效或已登出',
+                    'data' => null
+                ], 401);
+            }
             
             // 将用户信息添加到请求中
             $request->user = $decoded;
