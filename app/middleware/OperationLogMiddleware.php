@@ -33,16 +33,9 @@ class OperationLogMiddleware implements MiddlewareInterface
     private function logOperation(Request $request, Response $response, $startTime)
     {
         try {
-            // 跳过不需要记录日志的接口
-            $skipPaths = [
-                '/api/',
-                '/api/me',
-                '/api/refresh',
-                '/api/logout'
-            ];
-            
+            // 跳过静态资源/文档等
             $path = $request->path();
-            if (in_array($path, $skipPaths)) {
+            if (str_starts_with($path, '/static/') || str_starts_with($path, '/favicon') || str_starts_with($path, '/api-docs')) {
                 return;
             }
             
@@ -72,6 +65,10 @@ class OperationLogMiddleware implements MiddlewareInterface
             $rightDesc = $this->getRightDescription($url, $method);
             if ($rightDesc) {
                 $operationInfo['desc'] = $rightDesc;
+            }
+            // 若仍为空，基于路径+方法猜测中文描述
+            if (empty($operationInfo['desc'])) {
+                $operationInfo['desc'] = $this->guessDesc($method, $path);
             }
             
             // 记录日志
@@ -155,9 +152,10 @@ class OperationLogMiddleware implements MiddlewareInterface
         $pathParts = explode('/', trim($path, '/'));
         
         if (count($pathParts) >= 2) {
-            $module = $pathParts[1]; // api/admin, api/merchant 等
+            $module = $pathParts[1]; // 第1段通常为 api
+            $second = $pathParts[2] ?? '';
             
-            switch ($module) {
+            switch ($second) {
                 case 'admin':
                     $info['module'] = 'admin';
                     $info['desc'] = $this->getAdminOperationDesc($path, $method);
@@ -169,6 +167,15 @@ class OperationLogMiddleware implements MiddlewareInterface
                 case 'user':
                     $info['module'] = 'user';
                     $info['desc'] = $this->getUserOperationDesc($path, $method);
+                    break;
+                case 'permissions':
+                    $info['module'] = 'permission';
+                    break;
+                case 'roles':
+                    $info['module'] = 'role';
+                    break;
+                case 'operation-logs':
+                    $info['module'] = 'operation_log';
                     break;
             }
         }
@@ -189,6 +196,30 @@ class OperationLogMiddleware implements MiddlewareInterface
         }
         
         return $info;
+    }
+
+    private function guessDesc(string $method, string $path): string
+    {
+        $m = strtoupper($method);
+        $action = [
+            'GET' => '查看',
+            'POST' => '创建',
+            'PUT' => '更新',
+            'DELETE' => '删除'
+        ][$m] ?? $m;
+        if (str_starts_with($path, '/api/permissions/menu')) return '获取菜单权限';
+        if (str_starts_with($path, '/api/permissions/tree')) return '查看权限树';
+        if (str_starts_with($path, '/api/permissions')) return $action . '权限';
+        if (str_starts_with($path, '/api/roles/all-rights-tree')) return '查看权限树';
+        if (str_starts_with($path, '/api/roles')) return $action . '角色';
+        if (str_starts_with($path, '/api/operation-logs/stats')) return '查看操作统计';
+        if (str_starts_with($path, '/api/operation-logs/clean')) return '清理旧日志';
+        if (str_starts_with($path, '/api/operation-logs')) return $action . '操作日志';
+        if (str_starts_with($path, '/api/login')) return '用户登录';
+        if (str_starts_with($path, '/api/logout')) return '用户登出';
+        if (str_starts_with($path, '/api/refresh-token')) return '刷新令牌';
+        if (str_starts_with($path, '/api/me')) return '获取我的信息';
+        return $action . ' ' . $path;
     }
 
     /**

@@ -16,15 +16,20 @@ return [
     // 全局中间件
     '' => [
         app\middleware\SecurityMiddleware::class,
+        app\middleware\CorsMiddleware::class,
         app\middleware\RateLimitMiddleware::class,
         app\middleware\PerformanceMiddleware::class,
-        app\middleware\CorsMiddleware::class,
         app\middleware\CsrfMiddleware::class,
+        app\middleware\OperationLogMiddleware::class,
     ],
     // 需要认证的路由中间件
     'api' => [
         app\middleware\JwtMiddleware::class,
         app\middleware\PermissionMiddleware::class,
-        app\middleware\OperationLogMiddleware::class,
+    ],
+    // 需要认证的API路由中间件
+    'api_auth' => [
+        app\middleware\JwtMiddleware::class,
+        app\middleware\PermissionMiddleware::class,
     ],
 ];

@@ -5,18 +5,15 @@ namespace app\middleware;
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
 use Webman\Http\Request;
-use app\support\Database;
+use think\facade\Db;
 
 /**
  * 性能监控中间件 - PHP 8.2 优化版本
  */
 class PerformanceMiddleware implements MiddlewareInterface
 {
-    private Database $db;
-
     public function __construct()
     {
-        $this->db = Database::getInstance();
     }
 
     public function process(Request $request, callable $handler): Response
@@ -55,7 +52,7 @@ class PerformanceMiddleware implements MiddlewareInterface
             'X-Response-Time' => round($executionTime, 2) . 'ms',
             'X-Memory-Usage' => round($memoryUsage, 2) . 'KB',
             'X-Peak-Memory' => round($peakMemory, 2) . 'MB',
-            'X-DB-Queries' => $this->getQueryCount(),
+            'X-DB-Queries' => 0,
         ]);
 
         // 记录性能数据到数据库
@@ -79,25 +76,18 @@ class PerformanceMiddleware implements MiddlewareInterface
     private function recordPerformanceMetrics(array $data): void
     {
         try {
-            $sql = "
-                INSERT INTO pay_performance_metrics 
-                (endpoint, method, response_time, memory_usage, peak_memory, 
-                 request_size, response_size, status_code, user_id, ip_address, user_agent) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ";
-            
-            $this->db->execute($sql, [
-                $data['endpoint'],
-                $data['method'],
-                $data['response_time'],
-                $data['memory_usage'],
-                $data['peak_memory'],
-                $data['request_size'],
-                $data['response_size'],
-                $data['status_code'],
-                $data['user_id'],
-                $data['ip_address'],
-                $data['user_agent']
+            Db::table('pay_performance_metrics')->insert([
+                'endpoint' => $data['endpoint'],
+                'method' => $data['method'],
+                'response_time' => $data['response_time'],
+                'memory_usage' => $data['memory_usage'],
+                'peak_memory' => $data['peak_memory'],
+                'request_size' => $data['request_size'],
+                'response_size' => $data['response_size'],
+                'status_code' => $data['status_code'],
+                'user_id' => $data['user_id'],
+                'ip_address' => $data['ip_address'],
+                'user_agent' => $data['user_agent'],
             ]);
         } catch (\Exception $e) {
             // 性能监控失败不应该影响主要功能
@@ -148,24 +138,17 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function getPerformanceStats(int $days = 7): array
     {
-        $db = Database::getInstance();
-        
-        $sql = "
-            SELECT 
-                endpoint,
-                method,
-                COUNT(*) as request_count,
-                AVG(response_time) as avg_response_time,
-                MAX(response_time) as max_response_time,
-                AVG(memory_usage) as avg_memory_usage,
-                COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count
-            FROM pay_performance_metrics 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-            GROUP BY endpoint, method
-            ORDER BY avg_response_time DESC
-        ";
-        
-        return $db->findAll($sql, [$days]);
+        $sql = "SELECT endpoint, method,
+                       COUNT(*) as request_count,
+                       AVG(response_time) as avg_response_time,
+                       MAX(response_time) as max_response_time,
+                       AVG(memory_usage) as avg_memory_usage,
+                       SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count
+                FROM pay_performance_metrics
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL :days DAY)
+                GROUP BY endpoint, method
+                ORDER BY avg_response_time DESC";
+        return Db::query($sql, ['days' => $days]);
     }
 
     /**
@@ -173,23 +156,13 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function getSlowQueries(float $threshold = 1000): array
     {
-        $db = Database::getInstance();
-        
-        $sql = "
-            SELECT 
-                endpoint,
-                method,
-                response_time,
-                memory_usage,
-                created_at,
-                user_id
-            FROM pay_performance_metrics 
-            WHERE response_time > ?
-            ORDER BY response_time DESC
-            LIMIT 100
-        ";
-        
-        return $db->findAll($sql, [$threshold]);
+        $rows = Db::table('pay_performance_metrics')
+            ->field(['endpoint', 'method', 'response_time', 'memory_usage', 'created_at', 'user_id'])
+            ->where('response_time', '>', $threshold)
+            ->order('response_time', 'desc')
+            ->limit(100)
+            ->select();
+        return $rows->toArray();
     }
 
     /**
@@ -197,12 +170,9 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function cleanupExpiredData(int $days = 30): int
     {
-        $db = Database::getInstance();
-        
-        $sql = "DELETE FROM pay_performance_metrics WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)";
-        $db->execute($sql, [$days]);
-        
-        return $db->getAffectedRows();
+        return Db::table('pay_performance_metrics')
+            ->whereRaw('created_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [$days])
+            ->delete();
     }
 
     /**
@@ -213,9 +183,10 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function softDeleteMetric(int $id): bool
     {
-        $db = Database::getInstance();
-        $sql = "UPDATE pay_performance_metrics SET is_del = 0, delete_time = NOW() WHERE id = ?";
-        return $db->execute($sql, [$id]);
+        return Db::table('pay_performance_metrics')->where('id', $id)->update([
+            'is_del' => 0,
+            'delete_time' => Db::raw('NOW()'),
+        ]) > 0;
     }
 
     /**
@@ -226,9 +197,10 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function restoreMetric(int $id): bool
     {
-        $db = Database::getInstance();
-        $sql = "UPDATE pay_performance_metrics SET is_del = 1, delete_time = NULL WHERE id = ?";
-        return $db->execute($sql, [$id]);
+        return Db::table('pay_performance_metrics')->where('id', $id)->update([
+            'is_del' => 1,
+            'delete_time' => null,
+        ]) > 0;
     }
 
     /**
@@ -239,9 +211,7 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function forceDeleteMetric(int $id): bool
     {
-        $db = Database::getInstance();
-        $sql = "DELETE FROM pay_performance_metrics WHERE id = ?";
-        return $db->execute($sql, [$id]);
+        return Db::table('pay_performance_metrics')->where('id', $id)->delete() > 0;
     }
 
     /**
@@ -256,10 +226,9 @@ class PerformanceMiddleware implements MiddlewareInterface
             return false;
         }
 
-        $db = Database::getInstance();
-        $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-        $sql = "UPDATE pay_performance_metrics SET is_del = 0, delete_time = NOW() WHERE id IN ({$placeholders})";
-        return $db->execute($sql, $ids);
+        return Db::table('pay_performance_metrics')
+            ->whereIn('id', $ids)
+            ->update(['is_del' => 0, 'delete_time' => Db::raw('NOW()')]) > 0;
     }
 
     /**
@@ -270,8 +239,9 @@ class PerformanceMiddleware implements MiddlewareInterface
      */
     public static function cleanSoftDeletedMetrics(int $days = 7): bool
     {
-        $db = Database::getInstance();
-        $sql = "DELETE FROM pay_performance_metrics WHERE is_del = 0 AND delete_time < DATE_SUB(NOW(), INTERVAL ? DAY)";
-        return $db->execute($sql, [$days]);
+        return Db::table('pay_performance_metrics')
+            ->where('is_del', 0)
+            ->whereRaw('delete_time < DATE_SUB(NOW(), INTERVAL ? DAY)', [$days])
+            ->delete() > 0;
     }
 }

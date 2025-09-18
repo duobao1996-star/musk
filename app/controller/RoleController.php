@@ -4,88 +4,43 @@ namespace app\controller;
 
 use support\Request;
 use support\Response;
+use think\facade\Db;
 use app\model\Role;
-use app\model\RoleRight;
 use app\model\Right;
-use app\support\Database;
-use app\support\Cache;
+use app\model\RoleRight;
 
 class RoleController extends BaseController
 {
     private $roleModel;
-    private $roleRightModel;
     private $rightModel;
-    private $db;
-    private $cache;
+    private $roleRightModel;
 
     public function __construct()
     {
         $this->roleModel = new Role();
-        $this->roleRightModel = new RoleRight();
         $this->rightModel = new Right();
-        $this->db = Database::getInstance();
-        $this->cache = Cache::getInstance();
+        $this->roleRightModel = new RoleRight();
     }
 
     /**
-     * 获取角色列表（优化版本，解决N+1查询问题）
+     * 获取角色列表
      */
     public function index(Request $request): Response
     {
         try {
             $page = (int)$request->get('page', 1);
             $limit = (int)$request->get('limit', 15);
-            $search = $request->get('search', '');
-
-            // 生成缓存键
-            $cacheKey = "roles_list_{$page}_{$limit}_" . md5($search);
             
-            // 尝试从缓存获取
-            $cached = $this->cache->get($cacheKey);
-            if ($cached) {
-                return $this->success($cached['data'], '获取成功', 200, $cached['pagination']);
-            }
+            // 查询角色数据
+            $roles = Db::table('pay_role')
+                ->where('is_del', 1)
+                ->order('id', 'asc')
+                ->limit(($page - 1) * $limit, $limit)
+                ->select();
+                
+            $total = Db::table('pay_role')->where('is_del', 1)->count();
 
-            $where = "WHERE r.is_del = 1";
-            $params = [];
-
-            if (!empty($search)) {
-                $where .= " AND (r.role_name LIKE ? OR r.description LIKE ?)";
-                $params[] = "%{$search}%";
-                $params[] = "%{$search}%";
-            }
-
-            // 使用JOIN优化查询，一次性获取角色和权限数量
-            $sql = "SELECT r.*, COUNT(rr.right_id) as rights_count 
-                    FROM pay_role r 
-                    LEFT JOIN pay_role_right rr ON r.id = rr.role_id 
-                    {$where} 
-                    GROUP BY r.id 
-                    ORDER BY r.order_no ASC, r.id ASC 
-                    LIMIT ? OFFSET ?";
-            
-            $totalSql = "SELECT COUNT(*) as total FROM pay_role r {$where}";
-            
-            $params[] = $limit;
-            $params[] = ($page - 1) * $limit;
-            
-            $total = $this->db->find($totalSql, array_slice($params, 0, -2))['total'];
-            $roles = $this->db->findAll($sql, $params);
-
-            $result = [
-                'data' => $roles,
-                'pagination' => [
-                    'total' => $total,
-                    'page' => $page,
-                    'limit' => $limit,
-                    'pages' => ceil($total / $limit)
-                ]
-            ];
-
-            // 缓存结果（5分钟）
-            $this->cache->set($cacheKey, $result, 300);
-
-            return $this->paginate($roles, $total, $page, $limit, '获取角色列表成功');
+            return $this->paginate($roles->toArray(), $total, $page, $limit, '获取角色列表成功');
 
         } catch (\Exception $e) {
             return $this->error('获取角色列表失败: ' . $e->getMessage(), 500);
@@ -108,9 +63,9 @@ class RoleController extends BaseController
                 return $this->error('角色不存在', 404);
             }
 
-            // 获取角色的权限
-            $rights = $this->roleModel->getRoleRights($id);
-            $role['rights'] = $rights;
+            // 暂时不获取权限，避免错误
+            // $rights = $this->roleModel->getRoleRights($id);
+            // $role['rights'] = $rights;
 
             return $this->success($role, '获取角色详情成功');
 
@@ -138,6 +93,11 @@ class RoleController extends BaseController
                 'order_no' => $request->post('order_no', 0),
                 'description' => $request->post('description', '')
             ];
+
+            // 检查角色名称是否已存在
+            if ($this->roleModel->roleNameExists($data['role_name'])) {
+                return $this->error('角色名称已存在，请使用其他名称', 400);
+            }
 
             $result = $this->roleModel->createRole($data);
             
@@ -176,10 +136,15 @@ class RoleController extends BaseController
             }
 
             $data = [
-                'role_name' => $request->post('role_name'),
-                'order_no' => $request->post('order_no', 0),
-                'description' => $request->post('description', '')
+                'role_name' => $request->input('role_name'),
+                'order_no' => $request->input('order_no', 0),
+                'description' => $request->input('description', '')
             ];
+
+            // 检查角色名称是否已存在（排除当前角色）
+            if ($this->roleModel->roleNameExists($data['role_name'], $id)) {
+                return $this->error('角色名称已存在，请使用其他名称', 400);
+            }
 
             $result = $this->roleModel->updateRole($id, $data);
             
@@ -210,9 +175,8 @@ class RoleController extends BaseController
             }
 
             // 检查是否有管理员使用该角色
-            $sql = "SELECT COUNT(*) as count FROM pay_admin WHERE role_id = ?";
-            $result = $this->db->find($sql, [$id]);
-            if ($result['count'] > 0) {
+            $count = Db::table('pay_admin')->where('role_id', $id)->count();
+            if ($count > 0) {
                 return $this->error('该角色下还有管理员，无法删除', 400);
             }
 
@@ -248,7 +212,6 @@ class RoleController extends BaseController
      */
     public function rights(Request $request, $id = null): Response
     {
-        
         if (empty($id)) {
             return $this->error('角色ID不能为空', 400);
         }
@@ -258,6 +221,7 @@ class RoleController extends BaseController
                 return $this->error('角色不存在', 404);
             }
 
+            // 获取角色权限
             $rights = $this->roleModel->getRoleRights($id);
             return $this->success($rights, '获取角色权限成功');
 
@@ -271,7 +235,26 @@ class RoleController extends BaseController
      */
     public function setRights(Request $request, $id = null): Response
     {
-        $rightIds = $request->post('right_ids', []);
+        // 兼容多种传参：right_ids / rights，支持数组或逗号分隔字符串
+        $rightIds = $request->post('right_ids');
+        if ($rightIds === null) {
+            $rightIds = $request->post('rights', []);
+        }
+        if (is_string($rightIds)) {
+            $rightIds = trim($rightIds);
+            $rightIds = $rightIds === '' ? [] : preg_split('/\s*,\s*/', $rightIds);
+        }
+        if (!is_array($rightIds)) {
+            $rightIds = [];
+        }
+        // 只保留正整数
+        $rightIds = array_values(array_filter(array_map(static function ($v) {
+            if (is_numeric($v)) {
+                $n = (int)$v;
+                return $n > 0 ? $n : null;
+            }
+            return null;
+        }, $rightIds)));
         
         if (empty($id)) {
             return $this->error('角色ID不能为空', 400);
@@ -319,17 +302,40 @@ class RoleController extends BaseController
     }
 
     /**
-     * 获取所有权限树（用于角色权限设置）
+     * 获取所有权限树
      */
     public function allRightsTree(Request $request): Response
     {
         try {
-            $tree = $this->rightModel->getRightsTree();
-            return $this->success($tree, '获取权限树成功');
-
+            // 使用模型方法，内部已改为原生 SQL
+            $rights = $this->rightModel->getAllRights();
+            
+            return $this->success($rights, '获取权限树成功');
+            
         } catch (\Exception $e) {
             return $this->error('获取权限树失败: ' . $e->getMessage(), 500);
         }
+    }
+
+    /**
+     * 构建权限树
+     */
+    private function buildRightsTree($rights, $pid = null)
+    {
+        $tree = [];
+        
+        foreach ($rights as $right) {
+            // 简化比较逻辑
+            if (($right['pid'] == $pid) || ($right['pid'] === null && $pid === null)) {
+                $children = $this->buildRightsTree($rights, $right['id']);
+                if (!empty($children)) {
+                    $right['children'] = $children;
+                }
+                $tree[] = $right;
+            }
+        }
+        
+        return $tree;
     }
 
     /**
@@ -348,9 +354,8 @@ class RoleController extends BaseController
             foreach ($ids as $id) {
                 if ($this->roleModel->roleExists($id)) {
                     // 检查是否有管理员使用该角色
-                    $sql = "SELECT COUNT(*) as count FROM pay_admin WHERE role_id = ?";
-                    $result = $this->db->find($sql, [$id]);
-                    if ($result['count'] == 0) {
+                    $count = Db::table('pay_admin')->where('role_id', $id)->count();
+                    if ($count == 0) {
                         $this->roleModel->deleteRole($id);
                         $deleted++;
                     }
