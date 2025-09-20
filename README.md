@@ -1,222 +1,224 @@
-# 🚀 Webman API 2.0
+# Musk管理系统 API
 
-> 基于 Webman 2.0 框架开发的企业级后端API系统，支持前后端分离架构
+基于 Webman + ThinkORM 构建的权限管理系统后端API。
 
-[![PHP Version](https://img.shields.io/badge/PHP-8.2+-blue.svg)](https://php.net)
-[![Webman Version](https://img.shields.io/badge/Webman-2.0-green.svg)](https://www.workerman.net/doc/webman/)
-[![MySQL Version](https://img.shields.io/badge/MySQL-8.0+-orange.svg)](https://mysql.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## 功能特性
 
-## ✨ 功能特性
+- 🔐 JWT认证授权
+- 👥 基于角色的权限控制(RBAC)
+- 📊 操作日志记录
+- 📈 性能监控
+- 🗑️ 软删除支持
+- 🔄 健康检查
 
-- 🔐 **JWT认证系统** - 安全的用户认证和授权
-- 👥 **RBAC权限管理** - 基于角色的访问控制
-- 👤 **用户管理模块** - 仅管理员管理（已移除普通用户/商户/代理）
-- 📊 **操作日志系统** - 完整的操作审计记录
-- ⚡ **性能监控** - API性能指标实时监控
-- 🗑️ **软删除机制** - 数据安全删除和恢复
-- 📚 **美观的API文档** - 可视化交互式文档
-- 🚀 **Redis缓存支持** - 高性能缓存机制
-- 🗄️ **数据库访问** - 统一使用 ThinkORM `think\\facade\\Db`（已移除自研连接池与 support\\Db）
-- 🛡️ **安全防护** - CSRF保护、XSS防护、限流
+## 技术栈
 
-## 🛠️ 技术栈
+- **框架**: Webman
+- **ORM**: ThinkORM
+- **认证**: JWT
+- **数据库**: MySQL
+- **PHP版本**: 8.0+
 
-- **后端框架**: Webman 2.0
-- **PHP版本**: 8.2+
-- **数据库**: MySQL 8.0+
-- **缓存**: Redis 6.0+
-- **认证**: JWT (JSON Web Token)
-- **架构**: RESTful API + 前后端分离
+## 快速开始
 
-## 🚀 快速开始
+### 1. 环境要求
 
-### 环境要求
-
-- PHP >= 8.2
-- MySQL >= 8.0
-- Redis >= 6.0 (可选，支持文件缓存降级)
+- PHP 8.0+
+- MySQL 5.7+
 - Composer
 
-### 安装部署
+### 2. 安装依赖
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/duobao1996-star/musk.git
-cd musk
-
-# 2. 安装依赖
 composer install
+```
 
-# 3. 配置环境变量
+### 3. 配置数据库
+
+复制环境配置文件：
+```bash
 cp env.example .env
-# 编辑 .env 文件配置数据库和Redis
+```
 
-# 4. 启动服务
+编辑 `.env` 文件，配置数据库连接信息：
+```env
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=newsf1
+DB_USERNAME=newsf1
+DB_PASSWORD=newsf1
+```
+
+### 4. 初始化数据库
+
+执行数据库初始化脚本：
+```bash
+mysql -h 127.0.0.1 -u newsf1 -pnewsf1 --default-character-set=utf8mb4 newsf1 < database/rebuild_database.sql
+```
+
+### 5. 启动服务
+
+```bash
 php start.php start
 ```
 
-### 服务地址
+服务将在 `http://localhost:8787` 启动。
 
-- **开发环境**: http://127.0.0.1:8787
-- **API文档**: http://127.0.0.1:8787/api-docs
-- **API基础路径**: http://127.0.0.1:8787/api
+## 默认账户
 
-## 📚 API文档
+| 用户名 | 密码 | 角色 | 权限 |
+|--------|------|------|------|
+| admin | Admin@12345 | Super Admin | 所有权限 |
+| manager | Admin@12345 | Admin | 大部分管理权限 |
+| operator | Admin@12345 | Operator | 基础操作权限 |
+| viewer | Admin@12345 | Viewer | 只读权限 |
 
-项目提供了美观的可视化API文档，包含：
+## API文档
 
-- 📖 完整的接口说明
-- 🔧 交互式API测试
-- 📋 参数详细说明
-- 💡 使用示例
+### 认证接口
 
-访问地址: http://127.0.0.1:8787/api-docs
+- `POST /api/login` - 用户登录
+- `POST /api/logout` - 用户登出
+- `POST /api/refresh-token` - 刷新令牌
+- `GET /api/me` - 获取个人信息
 
-## 🗂️ 项目结构
+### 权限管理
+
+- `GET /api/permissions` - 获取权限列表
+- `POST /api/permissions` - 创建权限
+- `PUT /api/permissions/{id}` - 更新权限
+- `DELETE /api/permissions/{id}` - 删除权限
+- `GET /api/permissions/tree` - 获取权限树
+- `GET /api/permissions/menu` - 获取菜单权限
+
+### 角色管理
+
+- `GET /api/roles` - 获取角色列表
+- `POST /api/roles` - 创建角色
+- `PUT /api/roles/{id}` - 更新角色
+- `DELETE /api/roles/{id}` - 删除角色
+- `GET /api/roles/{id}/rights` - 获取角色权限
+- `POST /api/roles/{id}/rights` - 设置角色权限
+- `GET /api/roles/all-rights-tree` - 获取全部权限树
+
+### 操作日志
+
+- `GET /api/operation-logs` - 获取操作日志
+- `GET /api/operation-logs/stats` - 获取操作统计
+- `GET /api/operation-logs/login` - 获取登录日志
+- `POST /api/operation-logs/clean` - 清理旧日志
+
+### 软删除日志
+
+- `GET /api/soft-delete/logs` - 获取已删除日志
+- `POST /api/soft-delete/logs/restore` - 恢复日志
+- `DELETE /api/soft-delete/logs/force` - 彻底删除日志
+- `POST /api/soft-delete/cleanup` - 回收站清理
+
+### 性能监控
+
+- `GET /api/performance/stats` - 性能统计
+- `GET /api/performance/slow-queries` - 慢查询列表
+
+### 系统检查
+
+- `GET /api/health` - 健康检查
+- `GET /api/ready` - 就绪检查
+
+## 权限系统
+
+系统采用基于角色的权限控制(RBAC)模型：
+
+### 角色类型
+
+1. **Super Admin** - 超级管理员
+   - 拥有所有权限
+   - 可以管理其他管理员
+
+2. **Admin** - 普通管理员
+   - 拥有大部分管理权限
+   - 不能执行敏感操作（如清理日志）
+
+3. **Operator** - 操作员
+   - 拥有基础操作权限
+   - 主要是查看和基础操作
+
+4. **Viewer** - 只读用户
+   - 只能查看数据
+   - 不能执行修改操作
+
+### 权限类型
+
+- **菜单权限** (menu=1) - 显示在左侧菜单中
+- **接口权限** (menu=0) - 具体的API操作权限
+
+## 开发说明
+
+### 项目结构
 
 ```
-webman-api/
-├── app/                    # 应用目录
+├── app/                    # 应用代码
 │   ├── controller/         # 控制器
-│   ├── model/             # 数据模型
-│   ├── middleware/        # 中间件
-│   ├── support/           # 支持类
-│   └── view/              # 视图模板
+│   ├── middleware/         # 中间件
+│   ├── model/             # 模型
+│   └── support/           # 支持类
 ├── config/                # 配置文件
 ├── database/              # 数据库相关
-├── public/                # 公共资源
-├── runtime/               # 运行时文件
-├── support/               # 框架支持
-├── API.md                 # API文档
-└── README.md              # 项目说明
+├── public/                # 公共文件
+├── scripts/               # 脚本文件
+└── runtime/               # 运行时文件
 ```
 
-## 🔧 配置说明
+### 中间件
 
-### 数据库配置（ThinkORM）
+- `JwtMiddleware` - JWT认证
+- `PermissionMiddleware` - 权限检查
+- `OperationLogMiddleware` - 操作日志
+- `PerformanceMiddleware` - 性能监控
+- `CorsMiddleware` - 跨域处理
+- `RateLimitMiddleware` - 频率限制
 
-```php
-// config/database.php
-'connections' => [
-    'mysql' => [
-        'host' => '127.0.0.1',
-        'port' => 3306,
-        'database' => 'newsf1',
-        'username' => 'newsf1',
-        'password' => 'newsf1',
-        'charset' => 'utf8mb4',
-    ],
-],
+### 数据库
+
+主要数据表：
+- `pay_admin` - 管理员表
+- `pay_role` - 角色表
+- `pay_right` - 权限表
+- `pay_role_right` - 角色权限关联表
+- `pay_operation_log` - 操作日志表
+- `pay_performance_metrics` - 性能监控表
+- `pay_system_config` - 系统配置表
+
+## 部署
+
+### 生产环境
+
+1. 配置环境变量
+2. 设置数据库连接
+3. 执行数据库初始化
+4. 启动服务：
+   ```bash
+   php start.php start -d
+   ```
+
+### Docker部署
+
+```dockerfile
+FROM php:8.0-cli
+# 安装扩展和依赖
+# 复制代码
+# 启动服务
 ```
 
-### Redis配置
+## 许可证
 
-```php
-// config/redis.php
-'connections' => [
-    'cache' => [
-        'host' => '127.0.0.1',
-        'port' => 6379,
-        'password' => '',
-        'database' => 0,
-    ],
-],
-```
+MIT License
 
-## 🔐 认证说明
+## 更新日志
 
-### JWT认证
-
-所有需要认证的接口都需要在请求头中携带JWT令牌：
-
-```http
-Authorization: Bearer <your_jwt_token>
-```
-
-### 获取令牌
-
-```bash
-curl -X POST http://127.0.0.1:8787/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password123"}'
-```
-
-## 📊 主要功能模块
-
-### 1. 用户认证
-- 用户登录/登出
-- JWT令牌管理
-- 令牌刷新机制
-
-### 2. 用户管理
-- 管理员管理（仅保留管理员体系）
-
-### 3. 权限管理
-- 角色管理
-- 权限管理
-- RBAC权限控制
-
-### 4. 操作日志
-- 登录日志
-- 操作记录
-- 日志统计
-- 日志清理
-
-### 5. 性能监控
-- API性能统计
-- 慢查询监控
-- 内存使用监控
-
-### 6. 软删除管理
-- 数据软删除
-- 数据恢复
-- 批量操作
-- 数据清理
-
-## 🚀 部署指南（推荐）
-
-- 使用宝塔 Git 自动推送 + 计划任务重启服务；Docker 方案已移除。
-
-```bash
-# 启动（开发）
-php start.php start
-
-# 生产：守护进程
-php start.php start -d
-
-# 停止/重启/状态
-php start.php stop
-php start.php restart
-php start.php status
-```
-
-## 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 📞 技术支持
-
-- **项目仓库**: https://github.com/duobao1996-star/musk
-- **问题反馈**: [Issues](https://github.com/duobao1996-star/musk/issues)
-- **技术文档**: [API.md](API.md)
-
-## 🙏 致谢
-
-感谢以下开源项目：
-
-- [Webman](https://www.workerman.net/doc/webman/) - 高性能PHP框架
-- [Workerman](https://www.workerman.net/) - PHP异步网络框架
-- [Firebase JWT](https://github.com/firebase/php-jwt) - JWT处理库
-
----
-
-⭐ 如果这个项目对您有帮助，请给它一个星标！
+### v2.0.0
+- 重构权限系统
+- 优化数据库结构
+- 完善API接口
+- 增加性能监控
+- 支持软删除

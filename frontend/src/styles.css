@@ -1,6 +1,0 @@
-:root{--header-h:56px}
-html,body,#app{height:100%;margin:0;overflow:hidden}
-.tags{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid #eee;background:#fff}
-.tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:4px;border:1px solid #dcdfe6;background:#f5f7fa;cursor:pointer}
-.tag.active{background:#ecf5ff;border-color:#409eff;color:#409eff}
-.tag .close{font-size:12px}
