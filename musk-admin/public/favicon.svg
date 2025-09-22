@@ -1,0 +1,64 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Musk Pay - Neon M">
+  <defs>
+    <!-- 多彩背景渐变 -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+
+    <!-- 放射柔光 -->
+    <radialGradient id="softGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 霓虹发光滤镜（外发光 + 模糊叠加） -->
+    <filter id="neon" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- 外环渐变描边 -->
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+
+    <!-- 星光闪烁渐变 -->
+    <radialGradient id="star" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 背景圆 + 柔光 -->
+  <circle cx="32" cy="32" r="30" fill="url(#bg)"/>
+  <circle cx="32" cy="32" r="26" fill="url(#softGlow)"/>
+
+  <!-- 动感彩环（部分浏览器favicon不动画，用作站内图标仍有效） -->
+  <g transform="translate(32 32)">
+    <circle r="27" fill="none" stroke="url(#ring)" stroke-width="2.2" stroke-dasharray="60 20" opacity=".9">
+      <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0" to="360" dur="6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- 霓虹 M 主形 -->
+  <path d="M16 44 V18 L32 34 L48 18 V44" fill="none" stroke="#ffffff" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#neon)"/>
+  <!-- 内层渐变细描边，增强层次 -->
+  <path d="M16 44 V18 L32 34 L48 18 V44" fill="none" stroke="url(#ring)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>
+
+  <!-- 星光点缀 -->
+  <g opacity=".9">
+    <circle cx="20" cy="14" r="1.6" fill="url(#star)"/>
+    <circle cx="50" cy="22" r="1.2" fill="url(#star)"/>
+    <circle cx="44" cy="50" r="1.4" fill="url(#star)"/>
+    <circle cx="14" cy="44" r="1.2" fill="url(#star)"/>
+  </g>
+</svg>

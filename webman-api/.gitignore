@@ -1,0 +1,69 @@
+# Webman API 2.0 项目 .gitignore
+
+# 运行时文件
+/runtime/
+/temp/
+/logs/
+
+# 缓存文件
+/cache/
+*.cache
+
+# 配置文件（包含敏感信息）
+.env
+.env.local
+.env.production
+
+# 依赖文件
+/vendor/
+composer.lock
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 数据库文件
+*.db
+*.sqlite
+
+# 上传文件
+/public/uploads/
+/uploads/
+
+# 测试覆盖率
+/coverage/
+
+# Node.js (如果前端使用)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 备份文件
+*.bak
+*.backup
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 进程ID文件
+*.pid
+
+# 会话文件
+sess_*
