@@ -59,6 +59,8 @@ class PermissionMiddleware implements MiddlewareInterface
         'GET:/api/permissions/menu', // 菜单权限获取
         'GET:/api/roles/all-rights-tree', // 权限树获取
         'GET:/api/permissions/tree', // 权限树获取
+        'GET:/api/dashboard/stats', // 仪表盘统计（所有登录用户可访问）
+        'GET:/api/performance/stats', // 性能监控（所有登录用户可访问）
     ];
 
     public function process(Request $request, callable $handler): Response

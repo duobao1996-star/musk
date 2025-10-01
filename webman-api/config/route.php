@@ -29,6 +29,11 @@ Route::get('/api/permissions/tree', [app\controller\PermissionController::class,
     app\middleware\JwtMiddleware::class
 ]);
 
+// 仪表盘统计（所有登录用户可访问）
+Route::get('/api/dashboard/stats', [app\controller\ApiController::class, 'dashboardStats'])->middleware([
+    app\middleware\JwtMiddleware::class
+]);
+
 // 需要权限验证的管理接口
 // 角色管理
 Route::get('/api/roles', [app\controller\RoleController::class, 'index'])->middleware([
