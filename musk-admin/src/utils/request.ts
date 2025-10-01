@@ -1,8 +1,8 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
-// 导出类型
-export type { AxiosRequestConfig }
+// 导出类型供其他文件使用
+export type { InternalAxiosRequestConfig as AxiosRequestConfig }
 
 // 创建axios实例
 const request = axios.create({
@@ -19,7 +19,7 @@ const request = axios.create({
 
 // 请求拦截器
 request.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     try {
       // 安全地从localStorage获取token
       const token = localStorage.getItem('token')
