@@ -1,6 +1,9 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
+// 导出类型
+export type { AxiosRequestConfig }
+
 // 创建axios实例
 const request = axios.create({
   baseURL: '/api',
