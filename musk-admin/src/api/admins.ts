@@ -43,11 +43,6 @@ export function deleteAdmin(id: number) {
   return request.delete(`/admins/${id}`)
 }
 
-// 获取管理员选项（用于下拉选择）
-export function getAdminOptions() {
-  return request.get<{ data: AdminItem[] }>('/admins/options')
-}
-
 // 批量创建管理员
 export function batchCreateAdmins(data: { user_name: string; email: string; password: string; role_id?: number; status?: number }[]) {
   return request.post('/admins/batch', { admins: data })
