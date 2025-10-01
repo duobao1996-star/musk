@@ -21,10 +21,13 @@ class BaseController
      */
     protected function success($data = null, string $message = '操作成功', int $code = 200): Response
     {
+        // 防止敏感数据泄露
+        $safeData = $this->sanitizeResponseData($data);
+        
         return json([
             'code' => $code,
             'message' => $message,
-            'data' => $data,
+            'data' => $safeData,
             'timestamp' => time()
         ]);
     }
@@ -56,11 +59,11 @@ class BaseController
      * @param int $limit 每页记录数
      * @return Response
      */
-    protected function paginate($data, int $total, int $page = 1, int $limit = 15): Response
+    protected function paginate($data, int $total, int $page = 1, int $limit = 15, string $message = '获取成功'): Response
     {
         return json([
             'code' => 200,
-            'message' => '获取成功',
+            'message' => $message,
             'data' => $data,
             'pagination' => [
                 'total' => $total,
@@ -86,14 +89,20 @@ class BaseController
         foreach ($rules as $field => $rule) {
             $value = $request->input($field);
             
-            // XSS防护：过滤HTML标签
+            // XSS防护：过滤HTML标签和特殊字符
             if (!empty($value)) {
+                // 移除HTML标签
+                $value = strip_tags($value);
+                // HTML实体编码
                 $value = htmlspecialchars(trim($value), ENT_QUOTES, 'UTF-8');
+                // 移除潜在的SQL注入字符
+                $value = str_replace(['\'', '"', ';', '--', '/*', '*/'], '', $value);
             }
             
             // 必填验证
             if (strpos($rule, 'required') !== false && empty($value)) {
                 $errors[$field] = $field . ' 不能为空';
+                continue;
             }
             
             // 邮箱格式验证
@@ -126,8 +135,109 @@ class BaseController
             if (strpos($rule, 'integer') !== false && !empty($value) && !filter_var($value, FILTER_VALIDATE_INT)) {
                 $errors[$field] = $field . ' 必须是整数';
             }
+            
+            // 用户名格式验证（字母数字下划线）
+            if (strpos($rule, 'username') !== false && !empty($value) && !preg_match('/^[a-zA-Z0-9_]{3,50}$/', $value)) {
+                $errors[$field] = $field . ' 只能包含字母、数字、下划线，长度3-50字符';
+            }
+            
+            // 密码强度验证
+            if (strpos($rule, 'password') !== false && !empty($value)) {
+                if (strlen($value) < 6) {
+                    $errors[$field] = $field . ' 长度不能少于6个字符';
+                } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/', $value)) {
+                    $errors[$field] = $field . ' 必须包含大小写字母和数字';
+                }
+            }
         }
         
         return $errors;
+    }
+    
+    /**
+     * 安全的输入获取方法
+     * 
+     * @param Request $request 请求对象
+     * @param string $key 参数名
+     * @param mixed $default 默认值
+     * @return mixed 安全的输入值
+     */
+    protected function safeInput(Request $request, string $key, $default = null)
+    {
+        $value = $request->input($key, $default);
+        
+        if (!empty($value) && is_string($value)) {
+            // 移除HTML标签
+            $value = strip_tags($value);
+            // HTML实体编码
+            $value = htmlspecialchars(trim($value), ENT_QUOTES, 'UTF-8');
+        }
+        
+        return $value;
+    }
+
+    /**
+     * 清理响应数据，移除敏感信息
+     * 
+     * @param mixed $data 原始数据
+     * @return mixed 清理后的数据
+     */
+    protected function sanitizeResponseData($data)
+    {
+        if (is_array($data)) {
+            $sanitized = [];
+            foreach ($data as $key => $value) {
+                // 跳过敏感字段（但允许token字段用于登录响应）
+                if (in_array(strtolower($key), ['password', 'user_password', 'secret', 'key', 'private_key'])) {
+                    continue;
+                }
+                
+                if (is_array($value)) {
+                    $sanitized[$key] = $this->sanitizeResponseData($value);
+                } else {
+                    $sanitized[$key] = $value;
+                }
+            }
+            return $sanitized;
+        }
+        
+        return $data;
+    }
+
+    /**
+     * 记录操作日志
+     * 
+     * @param string $operation 操作类型
+     * @param string $module 操作模块
+     * @param string $description 操作描述
+     * @param array $requestData 请求数据
+     * @param int $responseCode 响应状态码
+     */
+    protected function logOperation(string $operation, string $module, string $description, array $requestData = [], int $responseCode = 200): void
+    {
+        try {
+            $user = request()->user ?? null;
+            $adminId = $user->user_id ?? 0;
+            $adminName = $user->username ?? '未知用户';
+            
+            \app\model\OperationLog::create([
+                'admin_id' => $adminId,
+                'admin_name' => $adminName,
+                'operation_type' => $operation,
+                'operation_module' => $module,
+                'operation_desc' => $description,
+                'request_url' => request()->path(),
+                'request_method' => request()->method(),
+                'request_data' => json_encode($requestData, JSON_UNESCAPED_UNICODE),
+                'response_code' => $responseCode,
+                'response_msg' => $responseCode >= 200 && $responseCode < 300 ? '成功' : '失败',
+                'ip_address' => request()->getRealIp(),
+                'user_agent' => request()->header('user-agent', ''),
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
+        } catch (\Exception $e) {
+            // 日志记录失败不应该影响主业务
+            error_log("操作日志记录失败: " . $e->getMessage());
+        }
     }
 }

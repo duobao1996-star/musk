@@ -3,6 +3,7 @@
 namespace app\model;
 
 use think\facade\Db;
+use app\support\SecurityHelper;
 
 /**
  * 用户模型
@@ -81,7 +82,7 @@ class User
     {
         $insertData = [
             'user_name' => $data['user_name'],
-            'user_password' => password_hash($data['password'], PASSWORD_DEFAULT),
+            'user_password' => SecurityHelper::hashPassword($data['password']),
             'email' => $data['email'],
             'role_id' => $data['role_id'] ?? 1,
             'ctime' => Db::raw('NOW()'),
@@ -105,7 +106,7 @@ class User
             $update['email'] = $data['email'];
         }
         if (isset($data['password'])) {
-            $update['user_password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+            $update['user_password'] = SecurityHelper::hashPassword($data['password']);
         }
         if (empty($update)) {
             return false;

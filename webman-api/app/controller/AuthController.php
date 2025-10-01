@@ -78,6 +78,10 @@ class AuthController extends BaseController
 
         // 仅支持管理员登录，验证用户名和密码
         $user = $userModel->findAdminByCredentials($username, $password);
+        // 禁用校验：status=0 不允许登录
+        if ($user && isset($user['status']) && (int)$user['status'] === 0) {
+            return $this->error('账号已被禁用', 401);
+        }
         $userType = 'admin'; // 固定为管理员类型
 
         if ($user) {

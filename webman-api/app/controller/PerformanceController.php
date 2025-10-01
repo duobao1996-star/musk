@@ -21,6 +21,17 @@ class PerformanceController extends BaseController
      */
     public function status(Request $request): Response
     {
+        // 检查用户权限
+        $user = $request->user ?? null;
+        if (!$user) {
+            return $this->error('用户未登录', 401);
+        }
+        
+        // 检查是否有性能监控查看权限
+        if (!$this->hasPerformanceViewPermission($user->user_id)) {
+            return $this->error('权限不足', 403);
+        }
+        
         try {
             $days = (int)$request->get('days', 7);
             
@@ -84,6 +95,17 @@ class PerformanceController extends BaseController
      */
     public function slowQueries(Request $request): Response
     {
+        // 检查用户权限
+        $user = $request->user ?? null;
+        if (!$user) {
+            return $this->error('用户未登录', 401);
+        }
+        
+        // 检查是否有性能监控查看权限
+        if (!$this->hasPerformanceViewPermission($user->user_id)) {
+            return $this->error('权限不足', 403);
+        }
+        
         try {
             $threshold = (float)$request->get('threshold', 1000);
             $limit = (int)$request->get('limit', 50);
@@ -258,6 +280,39 @@ class PerformanceController extends BaseController
                     unlink($file);
                 }
             }
+        }
+    }
+    
+    /**
+     * 检查用户是否有性能监控查看权限
+     */
+    private function hasPerformanceViewPermission($userId): bool
+    {
+        try {
+            // 检查是否为超级管理员
+            $isSuperAdmin = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role' => 'r'], 'ar.role_id = r.id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.role_name', '超级管理员')
+                ->count() > 0;
+                
+            if ($isSuperAdmin) {
+                return true;
+            }
+            
+            // 检查是否有性能监控查看权限 (ID: 22)
+            $hasPermission = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role_right' => 'rr'], 'ar.role_id = rr.role_id')
+                ->where('ar.admin_id', $userId)
+                ->where('rr.right_id', 22) // 性能监控权限
+                ->count() > 0;
+                
+            return $hasPermission;
+        } catch (\Exception $e) {
+            error_log("检查性能监控权限失败: " . $e->getMessage());
+            return false;
         }
     }
 }

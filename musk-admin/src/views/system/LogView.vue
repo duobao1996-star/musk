@@ -27,7 +27,7 @@
           <el-input v-model="searchForm.admin_name" placeholder="请输入操作人" clearable />
         </el-form-item>
         <el-form-item label="操作类型">
-          <el-select v-model="searchForm.operation_type" placeholder="请选择操作类型" clearable>
+          <el-select v-model="searchForm.operation_type" placeholder="操作类型" clearable filterable  class="wide-select">
             <el-option label="登录" value="login" />
             <el-option label="登出" value="logout" />
             <el-option label="查看" value="view" />
@@ -37,12 +37,24 @@
           </el-select>
         </el-form-item>
         <el-form-item label="操作模块">
-          <el-select v-model="searchForm.operation_module" placeholder="请选择操作模块" clearable>
-            <el-option label="权限管理" value="permission" />
-            <el-option label="角色管理" value="role" />
-            <el-option label="操作日志" value="operation_log" />
-            <el-option label="性能监控" value="performance" />
+          <el-select v-model="searchForm.operation_module" placeholder="请选择操作模块" clearable filterable class="wide-select">
+            <el-option v-for="m in moduleOptions" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="方法">
+          <el-select v-model="searchForm.method" placeholder="方法" clearable filterable  class="wide-select">
+            <el-option label="GET" value="GET" />
+            <el-option label="POST" value="POST" />
+            <el-option label="PUT" value="PUT" />
+            <el-option label="DELETE" value="DELETE" />
+            <el-option label="PATCH" value="PATCH" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态码">
+          <el-input v-model="searchForm.status_code" placeholder="例如 200 或 400,499" clearable class="code-input" />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="searchForm.keyword" placeholder="描述/URL/操作人" clearable />
         </el-form-item>
         <el-form-item label="时间范围">
           <el-date-picker
@@ -84,7 +96,11 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="operation_module" label="操作模块" width="120" />
+        <el-table-column prop="operation_module" label="操作模块" width="120">
+          <template #default="{ row }">
+            {{ getModuleLabel(row.operation_module) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="request_method" label="请求方法" width="100">
           <template #default="{ row }">
             <el-tag :type="getMethodType(row.request_method)">
@@ -96,8 +112,8 @@
         <el-table-column prop="ip_address" label="IP地址" width="140" />
         <el-table-column prop="response_code" label="状态码" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.response_code === 200 ? 'success' : 'danger'">
-              {{ row.response_code }}
+            <el-tag :type="getStatusCodeType(row.response_code)">
+              {{ row.response_code || '未知' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -237,8 +253,45 @@ const searchForm = reactive({
   admin_name: '',
   operation_type: '',
   operation_module: '',
+  method: '',
+  status_code: '',
+  keyword: '',
   dateRange: null as [string, string] | null
 })
+
+const moduleLabelMap: Record<string, string> = {
+  permission: '权限管理',
+  role: '角色管理',
+  operation_log: '操作日志',
+  performance: '性能监控',
+  auth: '认证',
+  admin: '管理员',
+  user: '用户',
+  merchant: '商户',
+  unknown: '未知'
+}
+
+const getModuleLabel = (key?: string) => moduleLabelMap[key || 'unknown'] || key || '未知'
+
+// 获取状态码标签类型
+const getStatusCodeType = (code: number | null | undefined) => {
+  if (!code) return 'info' // 空值显示为灰色
+  if (code === 200) return 'success' // 200 显示为绿色
+  if (code >= 400) return 'danger' // 4xx/5xx 显示为红色
+  return 'warning' // 其他状态码显示为橙色
+}
+
+const moduleOptions = ref<{label: string; value: string}[]>([
+  { label: '权限管理', value: '权限管理' },
+  { label: '角色管理', value: '角色管理' },
+  { label: '操作日志', value: 'operation_log' },
+  { label: '性能监控', value: '性能监控' },
+  { label: '管理员', value: '管理员' },
+  { label: '认证', value: '认证' },
+  { label: '用户', value: '用户' },
+  { label: '商户', value: '商户' },
+  { label: '未知', value: 'unknown' }
+])
 
 const cleanForm = reactive({
   days: 30
@@ -300,6 +353,9 @@ const getList = async () => {
     if (searchForm.admin_name) params.admin_name = searchForm.admin_name
     if (searchForm.operation_type) params.operation_type = searchForm.operation_type
     if (searchForm.operation_module) params.operation_module = searchForm.operation_module
+    if (searchForm.method) params.method = searchForm.method
+    if (searchForm.status_code) params.status_code = searchForm.status_code
+    if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.dateRange) {
       params.start_time = searchForm.dateRange[0]
       params.end_time = searchForm.dateRange[1]
@@ -337,6 +393,9 @@ const handleReset = () => {
     admin_name: '',
     operation_type: '',
     operation_module: '',
+    method: '',
+    status_code: '',
+    keyword: '',
     dateRange: null
   })
   pagination.page = 1
@@ -431,4 +490,6 @@ pre {
   border-radius: 4px;
   margin: 0;
 }
+.wide-select :deep(.el-input__wrapper) { min-width: 150px; }
+.code-input :deep(.el-input__wrapper) { min-width: 140px; }
 </style>

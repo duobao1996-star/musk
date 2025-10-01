@@ -1,126 +1,168 @@
 <?php
 /**
- * This file is part of webman.
- *
- * Licensed under The MIT License
- * For full copyright and license information, please see the MIT-LICENSE.txt
- * Redistributions of files must retain the above copyright notice.
- *
- * @author    walkor<walkor@workerman.net>
- * @copyright walkor<walkor@workerman.net>
- * @link      http://www.workerman.net/
- * @license   http://www.opensource.org/licenses/mit-license.php MIT License
+ * 路由配置文件
+ * 使用Webman框架的路由组特性进行权限控制
  */
 
 use Webman\Route;
 
-// API路由组
-Route::group('/api', function () {
-    // 健康检查
-    Route::get('/', [app\controller\ApiController::class, 'index']);
-    Route::get('/health', [app\controller\ApiController::class, 'health']);
-    Route::get('/ready', [app\controller\ApiController::class, 'ready']);
-    
-    // 认证相关路由（不需要JWT认证）
-    Route::post('/login', [app\controller\AuthController::class, 'login']);
-    Route::post('/refresh-token', [app\controller\AuthController::class, 'refreshToken']);
-    Route::post('/logout', [app\controller\AuthController::class, 'logout']);
-    
-    // 需要JWT认证的路由
-    Route::get('/me', [app\controller\AuthController::class, 'me'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    
-    // 角色管理路由
-    Route::get('/roles', [app\controller\RoleController::class, 'index'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::post('/roles', [app\controller\RoleController::class, 'store'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/roles/all-rights-tree', [app\controller\RoleController::class, 'allRightsTree'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/roles/{id}', [app\controller\RoleController::class, 'show'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::put('/roles/{id}', [app\controller\RoleController::class, 'update'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::delete('/roles/{id}', [app\controller\RoleController::class, 'destroy'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/roles/{id}/rights', [app\controller\RoleController::class, 'rights'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::post('/roles/{id}/rights', [app\controller\RoleController::class, 'setRights'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
+// 公开路由（无需认证）
+Route::post('/api/login', [app\controller\AuthController::class, 'login']);
+Route::post('/api/logout', [app\controller\AuthController::class, 'logout']);
 
-    // 权限管理路由
-    Route::get('/permissions', [app\controller\PermissionController::class, 'index'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::post('/permissions', [app\controller\PermissionController::class, 'store'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/permissions/tree', [app\controller\PermissionController::class, 'tree'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/permissions/menu', [app\controller\PermissionController::class, 'menu'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/permissions/{id}', [app\controller\PermissionController::class, 'show'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::put('/permissions/{id}', [app\controller\PermissionController::class, 'update'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::delete('/permissions/{id}', [app\controller\PermissionController::class, 'destroy'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
+// 健康检查路由
+Route::get('/api/health', [app\controller\ApiController::class, 'health']);
+Route::get('/api/ready', [app\controller\ApiController::class, 'ready']);
+Route::get('/api', [app\controller\ApiController::class, 'index']);
 
-    // 操作日志路由
-    Route::get('/operation-logs', [app\controller\OperationLogController::class, 'index'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/operation-logs/stats', [app\controller\OperationLogController::class, 'stats'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/operation-logs/login', [app\controller\OperationLogController::class, 'loginLogs'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::post('/operation-logs/clean', [app\controller\OperationLogController::class, 'clean'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
+// 公开API路由（需要JWT认证但无需权限验证）
+Route::get('/api/me', [app\controller\AuthController::class, 'me'])->middleware([
+    app\middleware\JwtMiddleware::class
+]);
+Route::get('/api/permissions/menu', [app\controller\PermissionController::class, 'menu'])->middleware([
+    app\middleware\JwtMiddleware::class
+]);
+Route::get('/api/roles/all-rights-tree', [app\controller\RoleController::class, 'allRightsTree'])->middleware([
+    app\middleware\JwtMiddleware::class
+]);
+Route::get('/api/permissions/tree', [app\controller\PermissionController::class, 'tree'])->middleware([
+    app\middleware\JwtMiddleware::class
+]);
 
-    // 软删除日志回收站
-    Route::get('/soft-delete/logs', [app\controller\OperationLogController::class, 'deletedLogs'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::post('/soft-delete/logs/restore', [app\controller\OperationLogController::class, 'restore'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::delete('/soft-delete/logs/force', [app\controller\OperationLogController::class, 'forceDelete'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    // 兼容别名：/soft-delete/force-delete/log（保留DELETE，移除POST混用）
-    Route::delete('/soft-delete/force-delete/log', [app\controller\OperationLogController::class, 'forceDelete'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    // 回收站清理
-    Route::post('/soft-delete/cleanup', [app\controller\OperationLogController::class, 'cleanup'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
+// 需要权限验证的管理接口
+// 角色管理
+Route::get('/api/roles', [app\controller\RoleController::class, 'index'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/roles', [app\controller\RoleController::class, 'store'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/roles/{id}', [app\controller\RoleController::class, 'show'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::put('/api/roles/{id}', [app\controller\RoleController::class, 'update'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::delete('/api/roles/{id}', [app\controller\RoleController::class, 'destroy'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/roles/{id}/rights', [app\controller\RoleController::class, 'rights'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/roles/{id}/rights', [app\controller\RoleController::class, 'setRights'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
 
-    // 性能监控路由
-    Route::get('/performance/stats', [app\controller\PerformanceController::class, 'status'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-    Route::get('/performance/slow-queries', [app\controller\PerformanceController::class, 'slowQueries'])->middleware([
-        app\middleware\JwtMiddleware::class
-    ]);
-});
+// 权限管理
+Route::get('/api/permissions', [app\controller\PermissionController::class, 'index'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/permissions', [app\controller\PermissionController::class, 'store'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/permissions/{id}', [app\controller\PermissionController::class, 'show'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::put('/api/permissions/{id}', [app\controller\PermissionController::class, 'update'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::delete('/api/permissions/{id}', [app\controller\PermissionController::class, 'destroy'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
 
-// 文档路由
-Route::get('/api-docs', [app\controller\IndexController::class, 'apiDocs']);
+// 操作日志管理
+Route::get('/api/operation-logs', [app\controller\OperationLogController::class, 'index'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+
+// 管理员管理
+Route::get('/api/admins', [app\controller\AdminController::class, 'index'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/admins', [app\controller\AdminController::class, 'store'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+// 管理员管理 - 具体路由必须在参数路由之前
+Route::post('/api/admins/batch-create', [app\controller\AdminController::class, 'batchCreate'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/admins/options', [app\controller\AdminController::class, 'options'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/admins/stats', [app\controller\AdminController::class, 'stats'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/admins/{id}', [app\controller\AdminController::class, 'show'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::put('/api/admins/{id}', [app\controller\AdminController::class, 'update'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::delete('/api/admins/{id}', [app\controller\AdminController::class, 'destroy'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/admins/{id}/reset-password', [app\controller\AdminController::class, 'resetPassword'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/admins/{id}/toggle-status', [app\controller\AdminController::class, 'toggleStatus'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+
+// 系统管理
+Route::get('/api/system/info', [app\controller\SystemController::class, 'info'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/system/config', [app\controller\SystemController::class, 'config'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/system/config', [app\controller\SystemController::class, 'updateConfig'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/system/status', [app\controller\SystemController::class, 'status'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/system/health', [app\controller\SystemController::class, 'health'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::post('/api/system/clear-cache', [app\controller\SystemController::class, 'clearCache'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+
+// 性能监控
+Route::get('/api/performance/stats', [app\controller\PerformanceController::class, 'status'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);
+Route::get('/api/performance/slow-queries', [app\controller\PerformanceController::class, 'slowQueries'])->middleware([
+    app\middleware\JwtMiddleware::class,
+    app\middleware\PermissionMiddleware::class
+]);

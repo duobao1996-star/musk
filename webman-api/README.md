@@ -64,6 +64,20 @@ php start.php start
 
 服务将在 `http://localhost:8787` 启动。
 
+### 6. 一键冒烟测试
+
+确保服务已启动后，执行：
+
+```bash
+bash scripts/smoke.sh
+```
+
+可选环境变量：
+
+```bash
+BASE_URL=http://127.0.0.1:8787 USERNAME=admin PASSWORD=Admin@12345 bash scripts/smoke.sh
+```
+
 ## 默认账户
 
 | 用户名 | 密码 | 角色 | 权限 |
@@ -119,6 +133,37 @@ php start.php start
 
 - `GET /api/performance/stats` - 性能统计
 - `GET /api/performance/slow-queries` - 慢查询列表
+
+### 统一响应规范
+
+成功：
+
+```json
+{
+  "code": 200,
+  "message": "ok",
+  "data": {},
+  "timestamp": 1700000000
+}
+```
+
+分页：
+
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": [ ... ],
+  "pagination": { "total": 100, "page": 1, "limit": 10, "pages": 10 },
+  "timestamp": 1700000000
+}
+```
+
+错误：
+
+```json
+{ "code": 401, "message": "未登录或已过期" }
+```
 
 ### 系统检查
 

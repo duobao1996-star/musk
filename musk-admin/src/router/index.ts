@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useMenuStore } from '@/stores/menu'
 import { ElMessage } from 'element-plus'
 
 const router = createRouter({
@@ -75,6 +76,60 @@ const router = createRouter({
             title: '性能监控',
             requiresAuth: true
           }
+        },
+        {
+          path: '/system/admins',
+          name: 'AdminAccounts',
+          component: () => import('@/views/system/AdminView.vue'),
+          meta: {
+            title: '管理员账号',
+            requiresAuth: true
+          }
+        },
+        {
+          path: '/system/info',
+          name: 'SystemInfo',
+          component: () => import('@/views/system/SystemInfoView.vue'),
+          meta: {
+            title: '系统信息',
+            requiresAuth: true
+          }
+        },
+        {
+          path: '/system/config',
+          name: 'SystemConfig',
+          component: () => import('@/views/system/SystemConfigView.vue'),
+          meta: {
+            title: '系统配置',
+            requiresAuth: true
+          }
+        },
+        {
+          path: '/system/performance/trends',
+          name: 'PerformanceTrends',
+          component: () => import('@/views/system/PerformanceTrendsView.vue'),
+          meta: {
+            title: '性能趋势',
+            requiresAuth: true
+          }
+        },
+        {
+          path: '/system/performance/slow',
+          name: 'PerformanceSlowQuery',
+          component: () => import('@/views/system/PerformanceSlowQueryView.vue'),
+          meta: {
+            title: '慢查询',
+            requiresAuth: true
+          }
+        },
+        {
+          path: '/system/logs/stats',
+          name: 'LogStats',
+          component: () => import('@/views/system/LogStatsView.vue'),
+          meta: {
+            title: '日志统计',
+            requiresAuth: true
+          }
         }
       ]
     },
@@ -89,6 +144,7 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  const menuStore = useMenuStore()
   
   // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - Musk管理系统` : 'Musk管理系统'
@@ -111,6 +167,42 @@ router.beforeEach(async (to, from, next) => {
         return
       }
     }
+    
+    // 权限验证：检查用户是否有访问当前页面的权限
+    if (to.path !== '' && to.path !== '/') {
+      try {
+        // 获取用户菜单权限
+        let menuList = menuStore.menuList
+        if (menuList.length === 0) {
+          // 如果菜单为空，尝试获取菜单
+          await menuStore.getMenuList()
+          menuList = menuStore.menuList
+        }
+        
+        // 如果菜单仍然为空，说明用户没有权限，强制登出
+        if (menuList.length === 0) {
+          ElMessage.error('您没有权限访问系统')
+          authStore.logout()
+          next('/login')
+          return
+        }
+        
+        // 检查当前路径是否在用户权限范围内
+        const hasPermission = checkRoutePermission(to.path, menuList)
+        if (!hasPermission) {
+          ElMessage.error('您没有权限访问此页面')
+          next('/')
+          return
+        }
+      } catch (error) {
+        console.error('权限检查失败:', error)
+        // 如果权限检查失败，为了安全起见，清除登录状态并重定向到登录页
+        ElMessage.error('权限验证失败，请重新登录')
+        authStore.logout()
+        next('/login')
+        return
+      }
+    }
   }
   
   // 如果已登录用户访问登录页，重定向到首页
@@ -121,5 +213,40 @@ router.beforeEach(async (to, from, next) => {
   
   next()
 })
+
+// 检查路由权限
+function checkRoutePermission(path: string, menuList: any[]): boolean {
+  // 首页总是可以访问
+  if (path === '/' || path === '') return true
+  
+  // 输入验证
+  if (!path || !Array.isArray(menuList)) {
+    return false
+  }
+  
+  // 递归检查菜单权限
+  function checkMenu(menus: any[]): boolean {
+    if (!Array.isArray(menus)) return false
+    
+    for (const menu of menus) {
+      if (!menu || typeof menu !== 'object') continue
+      
+      // 检查当前菜单路径
+      if (menu.path === path) {
+        return true
+      }
+      
+      // 检查子菜单
+      if (menu.children && Array.isArray(menu.children) && menu.children.length > 0) {
+        if (checkMenu(menu.children)) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+  
+  return checkMenu(menuList)
+}
 
 export default router

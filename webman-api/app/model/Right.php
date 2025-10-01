@@ -7,6 +7,8 @@ use think\facade\Db; // 使用 ThinkPHP 的 Db 作为默认别名
 class Right
 {
     private static array $rightCache = [];
+    private static array $userPermissionCache = [];
+    private const CACHE_TTL = 300; // 5分钟缓存
 
     public function __construct()
     {
@@ -17,8 +19,20 @@ class Right
      */
     public function getRightByName($rightName)
     {
-        $row = Db::table('pay_right')->where('right_name', $rightName)->find();
-        return $row ? (array)$row : null;
+        if (empty($rightName) || !is_string($rightName)) {
+            return null;
+        }
+        
+        try {
+            $row = Db::table('pay_right')
+                ->where('right_name', $rightName)
+                ->where('is_del', 1)
+                ->find();
+            return $row ? (array)$row : null;
+        } catch (\Exception $e) {
+            error_log("获取权限信息失败: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -26,8 +40,20 @@ class Right
      */
     public function getRightById($id)
     {
-        $row = Db::table('pay_right')->where('id', $id)->find();
-        return $row ? (array)$row : null;
+        if (!is_numeric($id) || $id <= 0) {
+            return null;
+        }
+        
+        try {
+            $row = Db::table('pay_right')
+                ->where('id', (int)$id)
+                ->where('is_del', 1)
+                ->find();
+            return $row ? (array)$row : null;
+        } catch (\Exception $e) {
+            error_log("获取权限信息失败: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -48,12 +74,90 @@ class Right
      */
     public function getMenuRights()
     {
+        // 最终方案：仅 is_menu=1 视为菜单
         $rows = Db::table('pay_right')
-            ->where('menu', 1)
             ->where('is_del', 1)
+            ->where('is_menu', 1)
             ->order('sort', 'asc')
             ->select();
         return $rows->toArray();
+    }
+
+    /**
+     * 根据用户ID获取菜单权限
+     */
+    public function getUserMenuRights($userId)
+    {
+        try {
+            // 检查是否为超级管理员
+            $isSuperAdmin = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role' => 'r'], 'ar.role_id = r.id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.role_name', '超级管理员')
+                ->where('r.is_del', 1)
+                ->count() > 0;
+
+            if ($isSuperAdmin) {
+                // 超级管理员返回所有菜单权限
+                return $this->getMenuRights();
+            }
+
+            // 普通用户根据角色权限获取菜单
+            $rows = Db::table('pay_right')
+                ->alias('r')
+                ->join(['pay_role_right' => 'rr'], 'r.id = rr.right_id')
+                ->join(['pay_admin_role' => 'ar'], 'rr.role_id = ar.role_id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.is_menu', 1)
+                ->where('r.is_del', 1)
+                ->order('r.sort', 'asc')
+                ->field('r.*')
+                ->select();
+            
+            return $rows->toArray();
+        } catch (\Exception $e) {
+            error_log("获取用户菜单权限失败: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * 根据用户ID获取权限列表
+     */
+    public function getUserRights($userId)
+    {
+        try {
+            // 检查是否为超级管理员
+            $isSuperAdmin = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role' => 'r'], 'ar.role_id = r.id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.role_name', '超级管理员')
+                ->where('r.is_del', 1)
+                ->count() > 0;
+
+            if ($isSuperAdmin) {
+                // 超级管理员返回所有权限
+                return $this->getAllRights();
+            }
+
+            // 普通用户根据角色权限获取权限
+            $rows = Db::table('pay_right')
+                ->alias('r')
+                ->join(['pay_role_right' => 'rr'], 'r.id = rr.right_id')
+                ->join(['pay_admin_role' => 'ar'], 'rr.role_id = ar.role_id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.is_del', 1)
+                ->order('r.sort', 'asc')
+                ->field('r.*')
+                ->select();
+            
+            return $rows->toArray();
+        } catch (\Exception $e) {
+            error_log("获取用户权限失败: " . $e->getMessage());
+            return [];
+        }
     }
 
     /**

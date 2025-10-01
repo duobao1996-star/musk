@@ -28,6 +28,17 @@ class PermissionController extends BaseController
      */
     public function index(Request $request): Response
     {
+        // 检查用户权限
+        $user = $request->user ?? null;
+        if (!$user) {
+            return $this->error('用户未登录', 401);
+        }
+        
+        // 检查是否有权限管理查看权限
+        if (!$this->hasPermissionViewPermission($user->user_id)) {
+            return $this->error('权限不足', 403);
+        }
+        
         try {
             $page = (int)$request->get('page', 1);
             $limit = (int)$request->get('limit', 15);
@@ -77,12 +88,61 @@ class PermissionController extends BaseController
     public function menu(Request $request): Response
     {
         try {
-            $rights = $this->rightModel->getMenuRights();
-            return $this->success($rights, '获取菜单权限成功');
+            // 获取当前用户ID
+            $userId = $request->user->user_id ?? null;
+            if (!$userId) {
+                return $this->error('用户未登录', 401);
+            }
+
+            // 获取用户菜单权限
+            $rights = $this->rightModel->getUserMenuRights($userId);
+            
+            // 构建菜单树
+            $menuTree = $this->buildMenuTree($rights);
+            
+            return $this->success($menuTree, '获取菜单权限成功');
 
         } catch (\Exception $e) {
             return $this->error('获取菜单权限失败: ' . $e->getMessage(), 500);
         }
+    }
+
+    /**
+     * 构建菜单树
+     */
+    private function buildMenuTree($rights, $pid = 0)
+    {
+        $tree = [];
+        
+        foreach ($rights as $right) {
+            if ($right['pid'] == $pid) {
+                $children = $this->buildMenuTree($rights, $right['id']);
+                if (!empty($children)) {
+                    $right['children'] = $children;
+                }
+                
+                // 格式化菜单项
+                $menuItem = [
+                    'id' => $right['id'],
+                    'title' => $right['description'],
+                    'path' => $right['path'],
+                    'icon' => $right['icon'] ?: 'ri:file-list-line',
+                    'component' => $right['component'],
+                    'redirect' => $right['redirect'],
+                    'hidden' => (bool)$right['hidden'],
+                    'alwaysShow' => (bool)$right['always_show'],
+                    'noCache' => (bool)$right['no_cache'],
+                    'affix' => (bool)$right['affix'],
+                    'breadcrumb' => (bool)$right['breadcrumb'],
+                    'activeMenu' => $right['active_menu'],
+                    'children' => $children ?? []
+                ];
+                
+                $tree[] = $menuItem;
+            }
+        }
+        
+        return $tree;
     }
 
     /**
@@ -114,6 +174,17 @@ class PermissionController extends BaseController
      */
     public function store(Request $request): Response
     {
+        // 检查用户权限
+        $user = $request->user ?? null;
+        if (!$user) {
+            return $this->error('用户未登录', 401);
+        }
+        
+        // 检查是否有权限创建权限
+        if (!$this->hasPermissionCreatePermission($user->user_id)) {
+            return $this->error('权限不足', 403);
+        }
+        
         // 更新允许部分字段，可选校验
         $errors = $this->validate($request, [
             'right_name' => 'min:1',
@@ -335,6 +406,71 @@ class PermissionController extends BaseController
 
         } catch (\Exception $e) {
             return $this->error('批量删除权限失败: ' . $e->getMessage(), 500);
+        }
+    }
+    
+    /**
+     * 检查用户是否有权限查看权限
+     */
+    private function hasPermissionViewPermission($userId): bool
+    {
+        return $this->checkPermissionPermission($userId, 251); // 权限列表权限
+    }
+    
+    /**
+     * 检查用户是否有权限创建权限
+     */
+    private function hasPermissionCreatePermission($userId): bool
+    {
+        return $this->checkPermissionPermission($userId, 252); // 权限添加权限
+    }
+    
+    /**
+     * 检查用户是否有权限编辑权限
+     */
+    private function hasPermissionEditPermission($userId): bool
+    {
+        return $this->checkPermissionPermission($userId, 253); // 权限编辑权限
+    }
+    
+    /**
+     * 检查用户是否有权限删除权限
+     */
+    private function hasPermissionDeletePermission($userId): bool
+    {
+        return $this->checkPermissionPermission($userId, 253); // 权限编辑权限包含删除
+    }
+    
+    /**
+     * 通用权限管理权限检查方法
+     */
+    private function checkPermissionPermission($userId, $permissionId): bool
+    {
+        try {
+            // 检查是否为超级管理员
+            $isSuperAdmin = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role' => 'r'], 'ar.role_id = r.id')
+                ->where('ar.admin_id', $userId)
+                ->where('r.role_name', '超级管理员')
+                ->count() > 0;
+                
+            if ($isSuperAdmin) {
+                return true;
+            }
+            
+            // 检查是否有指定权限
+            $hasPermission = Db::table('pay_admin_role')
+                ->alias('ar')
+                ->join(['pay_role_right' => 'rr'], 'ar.role_id = rr.role_id')
+                ->where('ar.admin_id', $userId)
+                ->where('rr.right_id', $permissionId)
+                ->count() > 0;
+                
+            return $hasPermission;
+        } catch (\Exception $e) {
+            error_log("检查权限管理权限失败: " . $e->getMessage());
+            return false;
         }
     }
 }

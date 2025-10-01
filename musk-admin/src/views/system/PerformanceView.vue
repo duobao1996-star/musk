@@ -51,7 +51,7 @@
               <el-icon><CircleClose /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ (performanceStats.error_rate * 100).toFixed(2) }}%</div>
+              <div class="stat-number">{{ formatPercent(performanceStats.error_rate) }}</div>
               <div class="stat-label">错误率</div>
             </div>
           </div>
@@ -72,8 +72,8 @@
               <div class="memory-label">当前内存使用</div>
               <div class="memory-value">{{ formatMemory(performanceStats.memory_usage) }}</div>
               <el-progress 
-                :percentage="(performanceStats.memory_usage / performanceStats.peak_memory * 100)" 
-                :color="getMemoryColor(performanceStats.memory_usage / performanceStats.peak_memory)"
+                :percentage="getMemoryPercent(performanceStats.memory_usage, performanceStats.peak_memory)" 
+                :color="getMemoryColor(getSafeRatio(performanceStats.memory_usage, performanceStats.peak_memory))"
               />
             </div>
             <div class="memory-item">
@@ -105,8 +105,8 @@
             <div class="health-item">
               <el-icon class="health-icon warning"><Warning /></el-icon>
               <span>内存使用</span>
-              <el-tag :type="getMemoryTagType(performanceStats.memory_usage / performanceStats.peak_memory)">
-                {{ getMemoryStatus(performanceStats.memory_usage / performanceStats.peak_memory) }}
+              <el-tag :type="getMemoryTagType(getSafeRatio(performanceStats.memory_usage, performanceStats.peak_memory))">
+                {{ getMemoryStatus(getSafeRatio(performanceStats.memory_usage, performanceStats.peak_memory)) }}
               </el-tag>
             </div>
             <div class="health-item">
@@ -231,6 +231,28 @@ const formatMemory = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// 百分比格式化（0-1 -> 0-100%），容错
+const formatPercent = (ratio: number) => {
+  const n = Number(ratio)
+  const value = isFinite(n) ? n : 0
+  return (Math.min(Math.max(value, 0), 1) * 100).toFixed(2) + '%'
+}
+
+// 安全比值（分母为0时返回0）
+const getSafeRatio = (num: number, den: number) => {
+  const a = Number(num)
+  const b = Number(den)
+  if (!isFinite(a) || !isFinite(b) || b <= 0) return 0
+  const r = a / b
+  return r > 0 ? r : 0
+}
+
+// 进度条百分比(0-100 范围内)
+const getMemoryPercent = (used: number, peak: number) => {
+  const percent = getSafeRatio(used, peak) * 100
+  return Math.min(Math.max(Math.round(percent), 0), 100)
+}
+
 // 获取内存使用颜色
 const getMemoryColor = (ratio: number) => {
   if (ratio < 0.5) return '#67c23a'
@@ -294,7 +316,16 @@ const formatTime = (time: string) => {
 const getPerformanceStatsData = async () => {
   try {
     const response = await getPerformanceStats()
-    performanceStats.value = response.data.data
+    const d = response.data.data || {}
+    // 强制数值化并提供默认值
+    performanceStats.value = {
+      total_requests: Number(d.total_requests) || 0,
+      avg_response_time: Number(d.avg_response_time) || 0,
+      slow_requests: Number(d.slow_requests) || 0,
+      error_rate: Number(d.error_rate) || 0,
+      memory_usage: Number(d.memory_usage) || 0,
+      peak_memory: Number(d.peak_memory) || 0
+    }
   } catch (error) {
     console.error('获取性能统计失败:', error)
   }
@@ -308,7 +339,8 @@ const getSlowQueries = async () => {
       threshold: slowQueryThreshold.value,
       limit: 50
     })
-    slowQueryData.value = response.data.data
+    const list = response?.data?.data
+    slowQueryData.value = Array.isArray(list) ? list : []
   } catch (error) {
     ElMessage.error('获取慢查询失败')
   } finally {

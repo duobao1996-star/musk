@@ -106,7 +106,7 @@
         show-checkbox
         node-key="id"
         :default-checked-keys="checkedKeys"
-        check-strictly
+        default-expand-all
       />
       
       <template #footer>
@@ -121,6 +121,7 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { useMenuStore } from '@/stores/menu'
 import {
   getRoleList,
   createRole,
@@ -189,6 +190,7 @@ const getList = async () => {
   }
 }
 
+
 // 新增
 const handleAdd = () => {
   dialogTitle.value = '新增角色'
@@ -222,6 +224,47 @@ const handleDelete = async (row: Role) => {
   }
 }
 
+// 过滤出用户明确选择的权限（排除自动添加的父级权限）
+const filterUserSelectedPermissions = (allRightIds: number[], permissionTree: any[]): number[] => {
+  const userSelectedIds: number[] = []
+  
+  // 递归遍历权限树，找出用户明确选择的权限
+  const traverseTree = (nodes: any[]) => {
+    nodes.forEach(node => {
+      if (allRightIds.includes(node.id)) {
+        // 如果当前节点在权限列表中
+        const hasChildren = node.children && node.children.length > 0
+        
+        if (hasChildren) {
+          // 如果有子权限，检查子权限的选中情况
+          const selectedChildrenCount = node.children.filter((child: any) => allRightIds.includes(child.id)).length
+          
+          if (selectedChildrenCount === 0) {
+            // 如果子权限都没有被选中，说明用户明确选择了父权限
+            userSelectedIds.push(node.id)
+          } else if (selectedChildrenCount === node.children.length) {
+            // 如果所有子权限都被选中，说明父权限是自动添加的，不标记为用户选择
+            // 继续遍历子节点
+            traverseTree(node.children)
+          } else {
+            // 如果部分子权限被选中，说明父权限是自动添加的，但需要标记选中的子权限
+            traverseTree(node.children)
+          }
+        } else {
+          // 如果没有子权限，则标记为用户选择的权限
+          userSelectedIds.push(node.id)
+        }
+      } else if (node.children) {
+        // 如果当前节点不在权限列表中，继续遍历子节点
+        traverseTree(node.children)
+      }
+    })
+  }
+  
+  traverseTree(permissionTree)
+  return userSelectedIds
+}
+
 // 权限设置
 const handlePermission = async (row: Role) => {
   try {
@@ -230,15 +273,70 @@ const handlePermission = async (row: Role) => {
     
     // 获取权限树
     const treeResponse = await getAllRightsTree()
-    permissionTree.value = treeResponse.data
+    const treeData = (treeResponse as any)?.data?.data ?? (treeResponse as any)?.data ?? []
+    const list = Array.isArray(treeData) ? treeData : []
+    // 如果没有 children 字段，尝试由父子关系构建树
+    const hasChildren = list.some((n: any) => Array.isArray(n.children) && n.children.length)
+    if (hasChildren) {
+      permissionTree.value = list
+    } else {
+      // 动态识别父字段
+      const candidateKeys = ['parent_id','pid','parentId','parent','p_id']
+      let parentKey = 'parent_id'
+      for (const k of candidateKeys) {
+        if (list.some((it: any) => k in it)) { parentKey = k; break }
+      }
+      const map: Record<string, any> = {}
+      list.forEach((item: any) => {
+        const id = String(item.id)
+        map[id] = { ...item, id, children: [] }
+      })
+      const roots: any[] = []
+      list.forEach((item: any) => {
+        const pidRaw = item[parentKey]
+        const pid = pidRaw == null ? '' : String(pidRaw)
+        const node = map[String(item.id)]
+        if (pid && map[pid]) {
+          map[pid].children.push(node)
+        } else {
+          roots.push(node)
+        }
+      })
+      // 若仍全部为根且没有层级，按 path 的模块名分组构造树
+      const noHierarchy = roots.length === list.length && !roots.some((n: any) => n.children && n.children.length)
+      if (noHierarchy) {
+        const moduleBuckets: Record<string, any[]> = {}
+        roots.forEach((n: any) => {
+          const path: string = n.path || n.request_path || n.url || ''
+          // 模块名：/api/<module>/...
+          const m = (path.match(/^\/?api\/([^\/]+)/) || [])[1] || '其它'
+          if (!moduleBuckets[m]) moduleBuckets[m] = []
+          moduleBuckets[m].push(n)
+        })
+        const grouped: any[] = Object.keys(moduleBuckets).map((m) => ({
+          id: `module:${m}`,
+          description: m,
+          children: moduleBuckets[m]
+        }))
+        permissionTree.value = grouped
+      } else {
+        permissionTree.value = roots
+      }
+    }
     
     // 获取当前角色权限
     const rightsResponse = await getRoleRights(row.id)
-    checkedKeys.value = rightsResponse.data.map((item: any) => item.id)
+    const rightsList = (rightsResponse as any)?.data?.data ?? (rightsResponse as any)?.data ?? []
+    const allRightIds = Array.isArray(rightsList) ? rightsList.map((item: any) => item.id) : []
+    
+    // 过滤出用户明确选择的权限（排除自动添加的父级权限）
+    const userSelectedIds = filterUserSelectedPermissions(allRightIds, permissionTree.value)
+    checkedKeys.value = userSelectedIds
     
     await nextTick()
     if (treeRef.value) {
-      treeRef.value.setCheckedKeys(checkedKeys.value)
+      // 只设置用户明确选择的权限为选中状态
+      treeRef.value.setCheckedKeys(checkedKeys.value, false)
     }
   } catch (error) {
     ElMessage.error('获取权限数据失败')
@@ -248,12 +346,18 @@ const handlePermission = async (row: Role) => {
 // 保存权限
 const handleSavePermission = async () => {
   try {
-    const checkedNodes = treeRef.value?.getCheckedNodes() || []
-    const rightIds = checkedNodes.map((node: any) => node.id)
+    // 只获取实际选中的权限，不包含半选中的父节点
+    const checkedKeysAll = treeRef.value?.getCheckedKeys(false) || []
+    const rightIds = Array.from(new Set(checkedKeysAll))
+    
     
     await setRoleRights(currentRoleId.value, rightIds)
     ElMessage.success('权限设置成功')
     permissionDialogVisible.value = false
+    
+    // 刷新菜单状态，确保权限变更立即生效
+    const menuStore = useMenuStore()
+    await menuStore.getMenuList()
   } catch (error) {
     ElMessage.error('权限设置失败')
   }

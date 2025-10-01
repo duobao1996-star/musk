@@ -5,14 +5,27 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onErrorCaptured } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 
-onMounted(() => {
-  // 初始化用户信息
-  authStore.initUserInfo()
+onMounted(async () => {
+  try {
+    // 初始化用户信息
+    await authStore.initUserInfo()
+  } catch (error) {
+    console.error('初始化用户信息失败:', error)
+    ElMessage.error('系统初始化失败，请刷新页面重试')
+  }
+})
+
+// 全局错误捕获
+onErrorCaptured((error: Error, instance, info: string) => {
+  console.error('全局错误捕获:', error, info)
+  ElMessage.error('系统出现错误，请刷新页面重试')
+  return false
 })
 </script>
 

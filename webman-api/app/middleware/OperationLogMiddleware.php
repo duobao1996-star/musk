@@ -38,6 +38,23 @@ class OperationLogMiddleware implements MiddlewareInterface
             if (str_starts_with($path, '/static/') || str_starts_with($path, '/favicon') || str_starts_with($path, '/api-docs')) {
                 return;
             }
+
+            // 日志白名单（完全不记录）
+            $whitelist = [
+                '/api/roles',
+                '/api/permissions',
+                '/api/operation-logs',
+                '/api/performance',
+                // 控制器内已显式记录，避免重复
+                '/api/admins',
+                '/api/login',
+                '/api/logout',
+            ];
+            foreach ($whitelist as $w) {
+                if ($path === $w || str_starts_with($path, $w . '/')) {
+                    return;
+                }
+            }
             
             // 获取用户信息
             $user = $request->user ?? null;
@@ -55,8 +72,24 @@ class OperationLogMiddleware implements MiddlewareInterface
             
             // 获取响应信息
             $responseData = json_decode($response->rawBody(), true);
-            $responseCode = $responseData['code'] ?? $response->getStatusCode();
+            $responseCode = isset($responseData['code']) ? (int)$responseData['code'] : (int)$response->getStatusCode();
             $responseMsg = $responseData['message'] ?? '';
+
+            // 仅记录会改数据的请求，或错误/敏感GET
+            $mutatingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+            $forceLogPaths = ['/api/login', '/api/logout', '/api/me'];
+            $isForcePath = false;
+            foreach ($forceLogPaths as $fp) {
+                if ($path === $fp || str_starts_with($path, $fp . '/')) {
+                    $isForcePath = true; break;
+                }
+            }
+            if (!in_array($method, $mutatingMethods, true)) {
+                // 对GET：仅当错误或敏感路径时记录
+                if ($responseCode < 400 && !$isForcePath) {
+                    return;
+                }
+            }
             
             // 确定操作类型和模块
             $operationInfo = $this->getOperationInfo($path, $method);
@@ -157,34 +190,56 @@ class OperationLogMiddleware implements MiddlewareInterface
             
             switch ($second) {
                 case 'admin':
-                    $info['module'] = 'admin';
+                    $info['module'] = '管理员';
+                    $info['desc'] = $this->getAdminOperationDesc($path, $method);
+                    break;
+                case 'admins':
+                    // 统一管理员模块（复数）
+                    $info['module'] = '管理员';
                     $info['desc'] = $this->getAdminOperationDesc($path, $method);
                     break;
                 case 'merchant':
-                    $info['module'] = 'merchant';
+                    $info['module'] = '商户管理';
                     $info['desc'] = $this->getMerchantOperationDesc($path, $method);
                     break;
                 case 'user':
-                    $info['module'] = 'user';
+                    $info['module'] = '用户管理';
                     $info['desc'] = $this->getUserOperationDesc($path, $method);
                     break;
                 case 'permissions':
-                    $info['module'] = 'permission';
+                    $info['module'] = '权限管理';
                     break;
                 case 'roles':
-                    $info['module'] = 'role';
+                    $info['module'] = '角色管理';
                     break;
                 case 'operation-logs':
-                    $info['module'] = 'operation_log';
+                    $info['module'] = '操作日志';
                     break;
+                case 'performance':
+                    $info['module'] = '性能监控';
+                    break;
+                case 'login':
+                case 'logout':
+                case 'refresh-token':
+                case 'me':
+                    $info['module'] = '认证';
+                    break;
+                default:
+                    // 回退到第二段作为模块名，并翻译为中文
+                    if (!empty($second)) {
+                        $info['module'] = $this->translateModuleName($second);
+                    }
             }
         }
         
-        // 确定操作类型
+        // 确定操作类型（部分路径优先判断）
         if (strpos($path, '/login') !== false) {
             $info['type'] = 'login';
         } elseif (strpos($path, '/logout') !== false) {
             $info['type'] = 'logout';
+        } elseif (preg_match('#/admins/\d+/(reset-password|toggle-status)#', $path)) {
+            // 这些操作语义为更新
+            $info['type'] = 'update';
         } elseif ($method === 'GET') {
             $info['type'] = 'view';
         } elseif ($method === 'POST') {
@@ -196,6 +251,28 @@ class OperationLogMiddleware implements MiddlewareInterface
         }
         
         return $info;
+    }
+
+    /**
+     * 翻译模块名称为中文
+     */
+    private function translateModuleName($moduleName)
+    {
+        $translations = [
+            'admin' => '管理员',
+            'admins' => '管理员',
+            'auth' => '认证',
+            'permission' => '权限管理',
+            'role' => '角色管理',
+            'operation_log' => '操作日志',
+            'performance' => '性能监控',
+            'system' => '系统管理',
+            'user' => '用户管理',
+            'merchant' => '商户管理',
+            'unknown' => '未知'
+        ];
+        
+        return $translations[$moduleName] ?? $moduleName;
     }
 
     private function guessDesc(string $method, string $path): string
@@ -212,6 +289,11 @@ class OperationLogMiddleware implements MiddlewareInterface
         if (str_starts_with($path, '/api/permissions')) return $action . '权限';
         if (str_starts_with($path, '/api/roles/all-rights-tree')) return '查看权限树';
         if (str_starts_with($path, '/api/roles')) return $action . '角色';
+        // 管理员账号
+        if (preg_match('#^/api/admins/\d+/reset-password#', $path)) return '重置管理员密码';
+        if (preg_match('#^/api/admins/\d+/toggle-status#', $path)) return '切换管理员状态';
+        if (preg_match('#^/api/admins/\d+$#', $path) && $m === 'DELETE') return '删除管理员';
+        if (str_starts_with($path, '/api/admins')) return $action . '管理员';
         if (str_starts_with($path, '/api/operation-logs/stats')) return '查看操作统计';
         if (str_starts_with($path, '/api/operation-logs/clean')) return '清理旧日志';
         if (str_starts_with($path, '/api/operation-logs')) return $action . '操作日志';

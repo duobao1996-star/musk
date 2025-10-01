@@ -8,6 +8,7 @@ use think\facade\Db;
 use app\model\Role;
 use app\model\Right;
 use app\model\RoleRight;
+use app\model\OperationLog;
 
 class RoleController extends BaseController
 {
@@ -102,6 +103,16 @@ class RoleController extends BaseController
             $result = $this->roleModel->createRole($data);
             
             if ($result) {
+                // 日志
+                $op = new OperationLog();
+                $user = $request->user ?? null;
+                $op->logOperation($user->user_id ?? null, $user->username ?? '', 'create', 'role', '创建角色', [
+                    'method' => $request->method(),
+                    'url' => $request->path(),
+                    'params' => json_encode(['role_name' => $data['role_name']], JSON_UNESCAPED_UNICODE),
+                    'ip' => $request->getRealIp(),
+                    'user_agent' => $request->header('User-Agent')
+                ], ['code' => 200, 'message' => '创建角色成功']);
                 return $this->success([], '创建角色成功');
             } else {
                 return $this->error('创建角色失败', 500);
@@ -149,6 +160,15 @@ class RoleController extends BaseController
             $result = $this->roleModel->updateRole($id, $data);
             
             if ($result) {
+                $op = new OperationLog();
+                $user = $request->user ?? null;
+                $op->logOperation($user->user_id ?? null, $user->username ?? '', 'update', 'role', '更新角色', [
+                    'method' => $request->method(),
+                    'url' => $request->path(),
+                    'params' => json_encode(['id' => $id], JSON_UNESCAPED_UNICODE),
+                    'ip' => $request->getRealIp(),
+                    'user_agent' => $request->header('User-Agent')
+                ], ['code' => 200, 'message' => '更新角色成功']);
                 return $this->success([], '更新角色成功');
             } else {
                 return $this->error('更新角色失败', 500);
@@ -164,7 +184,6 @@ class RoleController extends BaseController
      */
     public function destroy(Request $request, $id = null): Response
     {
-        
         if (empty($id)) {
             return $this->error('角色ID不能为空', 400);
         }
@@ -183,6 +202,15 @@ class RoleController extends BaseController
             $result = $this->roleModel->deleteRole($id);
             
             if ($result) {
+                $op = new OperationLog();
+                $user = $request->user ?? null;
+                $op->logOperation($user->user_id ?? null, $user->username ?? '', 'delete', 'role', '删除角色', [
+                    'method' => $request->method(),
+                    'url' => $request->path(),
+                    'params' => json_encode(['id' => $id], JSON_UNESCAPED_UNICODE),
+                    'ip' => $request->getRealIp(),
+                    'user_agent' => $request->header('User-Agent')
+                ], ['code' => 200, 'message' => '删除角色成功']);
                 return $this->success([], '删除角色成功');
             } else {
                 return $this->error('删除角色失败', 500);
@@ -208,7 +236,7 @@ class RoleController extends BaseController
     }
 
     /**
-     * 获取角色权限
+     * 获取角色权限（仅菜单权限）
      */
     public function rights(Request $request, $id = null): Response
     {
@@ -221,9 +249,15 @@ class RoleController extends BaseController
                 return $this->error('角色不存在', 404);
             }
 
-            // 获取角色权限
+            // 获取角色权限（仅菜单权限）
             $rights = $this->roleModel->getRoleRights($id);
-            return $this->success($rights, '获取角色权限成功');
+            
+            // 过滤出菜单权限
+            $menuRights = array_filter($rights, function($right) {
+                return isset($right['is_menu']) && $right['is_menu'] == 1;
+            });
+            
+            return $this->success(array_values($menuRights), '获取角色权限成功');
 
         } catch (\Exception $e) {
             return $this->error('获取角色权限失败: ' . $e->getMessage(), 500);
@@ -231,7 +265,7 @@ class RoleController extends BaseController
     }
 
     /**
-     * 设置角色权限
+     * 设置角色权限（仅菜单权限）
      */
     public function setRights(Request $request, $id = null): Response
     {
@@ -265,9 +299,30 @@ class RoleController extends BaseController
                 return $this->error('角色不存在', 404);
             }
 
+            // 验证权限ID是否都是菜单权限
+            $menuRights = $this->rightModel->getMenuRights();
+            $menuRightIds = array_column($menuRights, 'id');
+            $invalidIds = array_diff($rightIds, $menuRightIds);
+            
+            if (!empty($invalidIds)) {
+                return $this->error('只能设置菜单权限，API权限由系统自动管理', 400);
+            }
+
+            // 自动添加父级权限，确保菜单能正常显示
+            $rightIds = $this->addParentPermissions($rightIds, $menuRights);
+
             $result = $this->roleModel->setRoleRights($id, $rightIds);
             
             if ($result) {
+                $op = new OperationLog();
+                $user = $request->user ?? null;
+                $op->logOperation($user->user_id ?? null, $user->username ?? '', 'update', 'role', '设置角色权限', [
+                    'method' => $request->method(),
+                    'url' => $request->path(),
+                    'params' => json_encode(['id' => $id, 'rights' => $rightIds], JSON_UNESCAPED_UNICODE),
+                    'ip' => $request->getRealIp(),
+                    'user_agent' => $request->header('User-Agent')
+                ], ['code' => 200, 'message' => '设置角色权限成功']);
                 return $this->success([], '设置角色权限成功');
             } else {
                 return $this->error('设置角色权限失败', 500);
@@ -279,7 +334,55 @@ class RoleController extends BaseController
     }
 
     /**
-     * 获取角色权限树
+     * 自动添加父级权限
+     */
+    private function addParentPermissions($rightIds, $menuRights)
+    {
+        // 创建权限ID到权限信息的映射
+        $rightMap = [];
+        foreach ($menuRights as $right) {
+            $rightMap[$right['id']] = $right;
+        }
+        
+        $finalRightIds = $rightIds;
+        
+        // 为每个权限添加其所有父级权限
+        foreach ($rightIds as $rightId) {
+            $parentIds = $this->getParentPermissionIds($rightId, $rightMap);
+            $finalRightIds = array_merge($finalRightIds, $parentIds);
+        }
+        
+        // 去重并返回
+        return array_unique($finalRightIds);
+    }
+    
+    
+    /**
+     * 递归获取权限的所有父级权限ID
+     */
+    private function getParentPermissionIds($rightId, $rightMap)
+    {
+        $parentIds = [];
+        
+        if (!isset($rightMap[$rightId])) {
+            return $parentIds;
+        }
+        
+        $right = $rightMap[$rightId];
+        
+        // 如果有父级权限（pid > 0），递归获取
+        if ($right['pid'] > 0) {
+            $parentIds[] = $right['pid'];
+            $grandParentIds = $this->getParentPermissionIds($right['pid'], $rightMap);
+            $parentIds = array_merge($parentIds, $grandParentIds);
+        }
+        
+        return $parentIds;
+    }
+    
+
+    /**
+     * 获取角色权限树（仅菜单权限）
      */
     public function rightsTree(Request $request, $id = null): Response
     {
@@ -293,7 +396,17 @@ class RoleController extends BaseController
                 return $this->error('角色不存在', 404);
             }
 
-            $tree = $this->roleRightModel->getRoleRightTree($id);
+            // 获取角色权限（仅菜单权限）
+            $rights = $this->roleModel->getRoleRights($id);
+            
+            // 过滤出菜单权限
+            $menuRights = array_filter($rights, function($right) {
+                return isset($right['is_menu']) && $right['is_menu'] == 1;
+            });
+            
+            // 构建权限树
+            $tree = $this->buildRightsTree(array_values($menuRights));
+            
             return $this->success($tree, '获取角色权限树成功');
 
         } catch (\Exception $e) {
@@ -302,15 +415,18 @@ class RoleController extends BaseController
     }
 
     /**
-     * 获取所有权限树
+     * 获取所有权限树（仅菜单权限）
      */
     public function allRightsTree(Request $request): Response
     {
         try {
-            // 使用模型方法，内部已改为原生 SQL
-            $rights = $this->rightModel->getAllRights();
+            // 只获取菜单权限，不包含API权限
+            $rights = $this->rightModel->getMenuRights();
             
-            return $this->success($rights, '获取权限树成功');
+            // 构建权限树
+            $tree = $this->buildRightsTree($rights);
+            
+            return $this->success($tree, '获取权限树成功');
             
         } catch (\Exception $e) {
             return $this->error('获取权限树失败: ' . $e->getMessage(), 500);
